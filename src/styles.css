@@ -18,6 +18,158 @@
   --shadow-offset: 6px;
 }
 
+/* === Colour schemes ===
+   Light schemes only swap the accent. Dark schemes swap the "ink on paper" pair:
+   --black is the ink (borders, text), --white is the paper (surfaces), so every
+   inverted block (black bg + white text) stays inverted in dark mode too. */
+:root {
+  --on-accent: #000000;
+  --accent-orange: #FF9F1C;
+  --hatch: rgba(0, 0, 0, 0.15);
+  --dots: rgba(102, 102, 102, 0.3);
+  --grid-line: rgba(0, 0, 0, 0.12);
+  --chart-label: #555555;
+  --row-hover: rgba(255, 230, 0, 0.08);
+
+  --sig-1: #00CC66;
+  --sig-2: #8FD14F;
+  --sig-3: #FFE600;
+  --sig-4: #FF9F1C;
+  --sig-5: #FF3333;
+
+  --ping-1: #FF3333;
+  --ping-2: #00A896;
+  --ping-3: #9B5DE5;
+  --ping-4: #0066FF;
+  --ping-5: #F59E0B;
+  --ping-6: #EC4899;
+  --ping-7: #10B981;
+  --ping-8: #F97316;
+
+  --chart-cpu: #E0C900;
+  --chart-ram: #9B5DE5;
+  --chart-disk: #00A854;
+  --chart-up: #00A854;
+  --chart-down: #0066FF;
+  --chart-conn: #FF3333;
+  --chart-proc: #0066FF;
+}
+
+[data-scheme="red-light"] { --accent: var(--accent-red); }
+[data-scheme="blue-light"] { --accent: var(--accent-blue); }
+[data-scheme="green-light"] { --accent: var(--accent-green); }
+[data-scheme="purple-light"] { --accent: var(--accent-purple); }
+
+[data-scheme$="-dark"] {
+  color-scheme: dark;
+  --black: var(--ink);
+  --white: var(--paper);
+  --card-bg: var(--paper);
+  --text: var(--ink);
+  --hatch: rgba(255, 255, 255, 0.12);
+  --dots: rgba(255, 255, 255, 0.10);
+  --grid-line: rgba(255, 255, 255, 0.10);
+  --chart-label: var(--text-muted);
+  --strip-gap: var(--bg);
+  --row-hover: color-mix(in srgb, var(--accent) 10%, transparent);
+
+  --sig-1: var(--accent-green);
+  --sig-2: color-mix(in srgb, var(--accent-green) 55%, var(--accent-yellow));
+  --sig-3: var(--accent-yellow);
+  --sig-4: var(--accent-orange);
+  --sig-5: var(--accent-red);
+
+  --ping-1: var(--accent-red);
+  --ping-2: var(--accent-cyan);
+  --ping-3: var(--accent-purple);
+  --ping-4: var(--accent-blue);
+  --ping-5: var(--accent-yellow);
+  --ping-6: var(--accent-pink);
+  --ping-7: var(--accent-green);
+  --ping-8: var(--accent-orange);
+
+  --chart-cpu: var(--accent-yellow);
+  --chart-ram: var(--accent-purple);
+  --chart-disk: var(--accent-green);
+  --chart-up: var(--accent-green);
+  --chart-down: var(--accent-blue);
+  --chart-conn: var(--accent-red);
+  --chart-proc: var(--accent-cyan);
+}
+
+/* Tokyo Night (night) */
+[data-scheme="tokyonight-dark"] {
+  --ink: #c0caf5; --paper: #24283b; --bg: #1a1b26; --text-muted: #8089b3; --deep: #0d0e15;
+  --accent: #7aa2f7; --on-accent: #1a1b26;
+  --accent-red: #f7768e; --accent-orange: #ff9e64; --accent-yellow: #e0af68; --accent-green: #9ece6a;
+  --accent-cyan: #7dcfff; --accent-blue: #7aa2f7; --accent-purple: #bb9af7; --accent-pink: #ff007c;
+}
+
+/* Dracula */
+[data-scheme="dracula-dark"] {
+  --ink: #f8f8f2; --paper: #282a36; --bg: #1e1f29; --text-muted: #8a95c9; --deep: #0e0f14;
+  --accent: #ff79c6; --on-accent: #21222c;
+  --accent-red: #ff5555; --accent-orange: #ffb86c; --accent-yellow: #f1fa8c; --accent-green: #50fa7b;
+  --accent-cyan: #8be9fd; --accent-blue: #8be9fd; --accent-purple: #bd93f9; --accent-pink: #ff79c6;
+}
+
+/* Monokai (classic) */
+[data-scheme="monokai-dark"] {
+  --ink: #f8f8f2; --paper: #272822; --bg: #1e1f1c; --text-muted: #a59f85; --deep: #0c0c0a;
+  --accent: #e6db74; --on-accent: #272822;
+  --accent-red: #f92672; --accent-orange: #fd971f; --accent-yellow: #e6db74; --accent-green: #a6e22e;
+  --accent-cyan: #66d9ef; --accent-blue: #66d9ef; --accent-purple: #ae81ff; --accent-pink: #f92672;
+}
+
+/* Nord */
+[data-scheme="nord-dark"] {
+  --ink: #eceff4; --paper: #3b4252; --bg: #2e3440; --text-muted: #a3adc2; --deep: #1b1f27;
+  --accent: #88c0d0; --on-accent: #2e3440;
+  --accent-red: #bf616a; --accent-orange: #d08770; --accent-yellow: #ebcb8b; --accent-green: #a3be8c;
+  --accent-cyan: #8fbcbb; --accent-blue: #81a1c1; --accent-purple: #b48ead; --accent-pink: #b48ead;
+}
+
+/* Gruvbox (dark, hard) */
+[data-scheme="gruvbox-dark"] {
+  --ink: #ebdbb2; --paper: #282828; --bg: #1d2021; --text-muted: #a89984; --deep: #0b0c0c;
+  --accent: #fe8019; --on-accent: #1d2021;
+  --accent-red: #fb4934; --accent-orange: #fe8019; --accent-yellow: #fabd2f; --accent-green: #b8bb26;
+  --accent-cyan: #8ec07c; --accent-blue: #83a598; --accent-purple: #d3869b; --accent-pink: #d3869b;
+}
+
+/* Catppuccin Mocha */
+[data-scheme="catppuccin-dark"] {
+  --ink: #cdd6f4; --paper: #1e1e2e; --bg: #181825; --text-muted: #9399b2; --deep: #0b0b12;
+  --accent: #cba6f7; --on-accent: #1e1e2e;
+  --accent-red: #f38ba8; --accent-orange: #fab387; --accent-yellow: #f9e2af; --accent-green: #a6e3a1;
+  --accent-cyan: #94e2d5; --accent-blue: #89b4fa; --accent-purple: #cba6f7; --accent-pink: #f5c2e7;
+}
+
+/* Dark schemes: hard shadows take a dim tint of the accent so cards keep their offset depth. */
+[data-scheme$="-dark"] {
+  --shadow: color-mix(in srgb, var(--accent) 38%, var(--bg));
+}
+
+/* Dark schemes: the footer is an ink block in light themes; keep it a dark band here. */
+[data-scheme$="-dark"] .footer {
+  --black: var(--deep);
+  --white: var(--ink);
+}
+
+/* Dark schemes: the accent-coloured header keeps dark ink on a bright accent, like the light themes. */
+/* Header labels sit on the accent colour in every scheme, so derive them from the on-accent ink. */
+.header {
+  --text-muted: color-mix(in srgb, var(--on-accent) 68%, transparent);
+}
+
+[data-scheme$="-dark"] .header {
+  --black: var(--on-accent);
+  --text: var(--on-accent);
+  --white: var(--ink);
+  --shadow: var(--on-accent);
+  color: var(--on-accent);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -98,12 +250,12 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   justify-content: center;
   transition: transform 0.1s ease, box-shadow 0.1s ease;
-  box-shadow: 3px 3px 0 var(--black);
+  box-shadow: 3px 3px 0 var(--shadow);
 }
 
 .btn-view:hover {
   transform: translate(-2px, -2px);
-  box-shadow: 5px 5px 0 var(--black);
+  box-shadow: 5px 5px 0 var(--shadow);
 }
 
 .btn-view:active,
@@ -138,7 +290,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .btn-admin:hover {
   transform: translate(-2px, -2px);
-  box-shadow: 5px 5px 0 var(--black);
+  box-shadow: 5px 5px 0 var(--shadow);
   color: var(--white);
 }
 
@@ -239,7 +391,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .node-card.offline {
-  background-image: radial-gradient(circle, rgba(102, 102, 102, 0.3) 1px, transparent 1px);
+  background-image: radial-gradient(circle, var(--dots) 1px, transparent 1px);
   background-size: 4px 4px;
   opacity: 0.9;
 }
@@ -351,8 +503,8 @@ h1, h2, h3, h4, h5, h6 {
     45deg,
     transparent,
     transparent 4px,
-    rgba(0, 0, 0, 0.15) 4px,
-    rgba(0, 0, 0, 0.15) 8px
+    var(--hatch) 4px,
+    var(--hatch) 8px
   );
   background-color: var(--bg);
   border: 2px solid var(--black);
@@ -471,7 +623,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: 1rem 1.25rem;
   background: var(--white);
   border: 3px solid var(--black);
-  box-shadow: 4px 4px 0 var(--black);
+  box-shadow: 4px 4px 0 var(--shadow);
 }
 
 /* Empty State */
@@ -645,11 +797,11 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .node-row:hover {
-  background-color: rgba(255, 230, 0, 0.08);
+  background-color: var(--row-hover);
 }
 
 .node-row.offline {
-  background-image: radial-gradient(circle, rgba(102, 102, 102, 0.3) 1px, transparent 1px);
+  background-image: radial-gradient(circle, var(--dots) 1px, transparent 1px);
   background-size: 4px 4px;
   opacity: 0.9;
 }
@@ -912,8 +1064,8 @@ h1, h2, h3, h4, h5, h6 {
     45deg,
     transparent,
     transparent 4px,
-    rgba(0, 0, 0, 0.15) 4px,
-    rgba(0, 0, 0, 0.15) 8px
+    var(--hatch) 4px,
+    var(--hatch) 8px
   );
   background-color: var(--bg);
   border: 2px solid var(--black);
@@ -956,7 +1108,7 @@ h1, h2, h3, h4, h5, h6 {
     width: 34px;
     height: 34px;
     border-width: 2px;
-    box-shadow: 2px 2px 0 var(--black);
+    box-shadow: 2px 2px 0 var(--shadow);
   }
 
   .btn-view svg,
@@ -1075,7 +1227,7 @@ h1, h2, h3, h4, h5, h6 {
 .modal-container {
   background: var(--white);
   border: var(--border-width) solid var(--black);
-  box-shadow: 12px 12px 0 var(--black);
+  box-shadow: 12px 12px 0 var(--shadow);
   width: min(96vw, 1400px);
   max-width: 1400px;
   max-height: 90vh;
@@ -1119,7 +1271,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .modal-close:hover {
   transform: translate(-2px, -2px);
-  box-shadow: 5px 5px 0 var(--black);
+  box-shadow: 5px 5px 0 var(--shadow);
   color: var(--accent);
 }
 
@@ -1179,10 +1331,12 @@ h1, h2, h3, h4, h5, h6 {
 
 .modal-node-status-tag.online {
   background: var(--accent-green);
+  color: var(--on-accent);
 }
 
 .modal-node-status-tag.offline {
   background: var(--accent-red);
+  color: var(--on-accent);
 }
 
 .modal-node-meta {
@@ -1253,7 +1407,7 @@ h1, h2, h3, h4, h5, h6 {
   border: 3px solid var(--black);
   padding: 1rem 1.25rem;
   background: var(--bg);
-  box-shadow: 4px 4px 0 var(--black);
+  box-shadow: 4px 4px 0 var(--shadow);
 }
 
 .modal-info-section-title {
@@ -1320,8 +1474,8 @@ h1, h2, h3, h4, h5, h6 {
     45deg,
     transparent,
     transparent 4px,
-    rgba(0, 0, 0, 0.15) 4px,
-    rgba(0, 0, 0, 0.15) 8px
+    var(--hatch) 4px,
+    var(--hatch) 8px
   );
 }
 
@@ -1345,9 +1499,9 @@ h1, h2, h3, h4, h5, h6 {
 
 .network-channel {
   padding: 0.75rem;
-  background: var(--white);
+  background: var(--bg);
   border: 2px solid var(--black);
-  box-shadow: 3px 3px 0 var(--black);
+  box-shadow: 3px 3px 0 var(--shadow);
   min-width: 0;
 }
 
@@ -1451,7 +1605,7 @@ h1, h2, h3, h4, h5, h6 {
   border: 3px solid var(--black);
   padding: 0.75rem;
   background: var(--bg);
-  box-shadow: 4px 4px 0 var(--black);
+  box-shadow: 4px 4px 0 var(--shadow);
   min-width: 0;
 }
 
@@ -1497,7 +1651,7 @@ h1, h2, h3, h4, h5, h6 {
   border: 3px solid var(--black);
   padding: 1rem 1.25rem;
   background: var(--bg);
-  box-shadow: 4px 4px 0 var(--black);
+  box-shadow: 4px 4px 0 var(--shadow);
   margin-bottom: 2rem;
   position: relative;
 }
@@ -1532,7 +1686,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: 1rem 1.25rem;
   background: var(--white);
   border: 3px solid var(--black);
-  box-shadow: 4px 4px 0 var(--black);
+  box-shadow: 4px 4px 0 var(--shadow);
 }
 
 .chart-loading-pixels {
@@ -1652,7 +1806,7 @@ h1, h2, h3, h4, h5, h6 {
   flex-direction: column;
   background: var(--bg);
   border: 3px solid var(--black);
-  box-shadow: 3px 3px 0 var(--black);
+  box-shadow: 3px 3px 0 var(--shadow);
   min-width: 0;
   cursor: pointer;
   transition: opacity 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
@@ -1664,7 +1818,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .latency-task-card.is-active {
   transform: translate(-2px, -2px);
-  box-shadow: 5px 5px 0 var(--black);
+  box-shadow: 5px 5px 0 var(--shadow);
 }
 
 .latency-task-row {
@@ -1763,12 +1917,13 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--bg);
   padding: 0.25rem;
   border: none;
-  box-shadow: 4px 4px 0 var(--black);
+  box-shadow: 4px 4px 0 var(--shadow);
 }
 
 .btn-timescale {
   padding: 0.25rem 0.6rem;
   background: var(--white);
+  color: var(--black);
   border: 2px solid var(--black);
   font-family: 'Space Grotesk', sans-serif;
   font-weight: 700;
@@ -1780,6 +1935,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .btn-timescale:hover {
   background: var(--accent-yellow);
+  color: var(--on-accent);
 }
 
 .btn-timescale.active {
@@ -1855,7 +2011,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: 2rem;
   background: var(--card-bg);
   border: var(--border-width) solid var(--black);
-  box-shadow: 12px 12px 0 var(--black);
+  box-shadow: 12px 12px 0 var(--shadow);
   opacity: 0;
   transform: translateY(16px) scale(0.98);
   transition: opacity 0.16s ease, transform 0.24s cubic-bezier(0.2, 0.85, 0.25, 1);
@@ -1928,7 +2084,7 @@ h1, h2, h3, h4, h5, h6 {
   outline: none;
   background: var(--bg);
   color: var(--text);
-  box-shadow: 3px 3px 0 var(--black);
+  box-shadow: 3px 3px 0 var(--shadow);
   font: 700 0.95rem 'Space Grotesk', sans-serif;
 }
 
@@ -1964,14 +2120,14 @@ h1, h2, h3, h4, h5, h6 {
   min-height: 46px;
   padding: 0.7rem 1rem;
   background: var(--accent);
-  color: var(--black);
-  box-shadow: 4px 4px 0 var(--black);
+  color: var(--on-accent);
+  box-shadow: 4px 4px 0 var(--shadow);
 }
 
 .auth-submit:hover:not(:disabled),
 .auth-oauth a:hover {
   transform: translate(-2px, -2px);
-  box-shadow: 6px 6px 0 var(--black);
+  box-shadow: 6px 6px 0 var(--shadow);
 }
 
 .auth-submit:disabled {
@@ -1984,7 +2140,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0.35rem 0.6rem;
   background: var(--white);
   color: var(--black);
-  box-shadow: 2px 2px 0 var(--black);
+  box-shadow: 2px 2px 0 var(--shadow);
   font-size: 0.68rem;
 }
 
@@ -2025,7 +2181,7 @@ h1, h2, h3, h4, h5, h6 {
 @media (max-width: 520px) {
   .auth-dialog {
     padding: 1.35rem;
-    box-shadow: 8px 8px 0 var(--black);
+    box-shadow: 8px 8px 0 var(--shadow);
   }
 
   .auth-heading h2 {
@@ -2053,13 +2209,6 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* === Fork extras: billing, traffic plan, CT/CU/CM latency === */
-:root {
-  --sig-1: #00CC66;
-  --sig-2: #8FD14F;
-  --sig-3: #FFE600;
-  --sig-4: #FF9F1C;
-  --sig-5: #FF3333;
-}
 
 .node-extras {
   display: flex;
@@ -2085,7 +2234,7 @@ h1, h2, h3, h4, h5, h6 {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  padding: 0.3rem 0.45rem;
+  padding: 0.3rem 0.35rem;
 }
 
 .x-cell + .x-cell {
@@ -2112,18 +2261,19 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .x-value {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .x-cell.x-warn {
   background: var(--accent-yellow);
+  color: var(--on-accent);
 }
 
 .x-cell.x-crit {
   background: var(--accent-red);
-  color: var(--white);
+  color: var(--on-accent);
 }
 
 .x-cell.x-warn .x-label,
@@ -2155,7 +2305,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .x-ct { background: var(--accent-blue); color: var(--white); }
 .x-cu { background: var(--accent-red); color: var(--white); }
-.x-cm { background: var(--accent-green); color: var(--black); }
+.x-cm { background: var(--accent-green); color: var(--on-accent); }
 
 .x-carrier-num {
   font-size: 0.72rem;
@@ -2172,7 +2322,7 @@ h1, h2, h3, h4, h5, h6 {
   gap: 1px;
   height: 14px;
   border: 2px solid var(--black);
-  background: var(--black);
+  background: var(--strip-gap, var(--black));
 }
 
 .x-seg {
@@ -2181,7 +2331,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .x-seg-empty {
-  background: repeating-linear-gradient(45deg, var(--bg) 0 2px, #c8c8c8 2px 3px);
+  background: repeating-linear-gradient(45deg, var(--bg) 0 2px, var(--hatch) 2px 3px);
 }
 
 .x-seg.lat-1 { background: var(--sig-1); }
@@ -2191,10 +2341,10 @@ h1, h2, h3, h4, h5, h6 {
 .x-seg.lat-5 { background: var(--sig-5); }
 
 /* Loss marker: a bottom band, separated from the latency color by a 1px black line. */
-.x-seg.loss-2 { box-shadow: inset 0 -4px 0 var(--sig-3), inset 0 -5px 0 var(--black); }
-.x-seg.loss-3 { box-shadow: inset 0 -4px 0 var(--sig-4), inset 0 -5px 0 var(--black); }
+.x-seg.loss-2 { box-shadow: inset 0 -4px 0 var(--sig-3), inset 0 -5px 0 var(--strip-gap, var(--black)); }
+.x-seg.loss-3 { box-shadow: inset 0 -4px 0 var(--sig-4), inset 0 -5px 0 var(--strip-gap, var(--black)); }
 .x-seg.loss-4,
-.x-seg.loss-5 { box-shadow: inset 0 -4px 0 var(--sig-5), inset 0 -5px 0 var(--black); }
+.x-seg.loss-5 { box-shadow: inset 0 -4px 0 var(--sig-5), inset 0 -5px 0 var(--strip-gap, var(--black)); }
 
 /* List view: extras become a second line under the metrics. */
 .node-row .node-extras {

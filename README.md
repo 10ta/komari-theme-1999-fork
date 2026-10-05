@@ -53,9 +53,20 @@ Fork of [r1cebucket/komari-theme-1999](https://github.com/r1cebucket/komari-them
   `@` 后为该 VPS 的 UTC 偏移小时数，不写则使用「VPS 默认时区」设置（默认 0，即 UTC）。当月没有该日期时（如 31 号）顺延到下月 1 号，与 agent 的规则一致。
 - 限制：填写的日期必须与 agent 实际参数一致；如果 agent 没有开启 `--month-rotate`，流量统计本身不会按月清零，此处显示的日均值也就不准确。
 
+### 配色主题
+
+后台「配色主题」可选 11 种：
+
+- 浅色（只换强调色）：`yellow-light`、`red-light`、`blue-light`、`green-light`、`purple-light`
+- 深色：`tokyonight-dark`、`dracula-dark`、`monokai-dark`、`nord-dark`、`gruvbox-dark`、`catppuccin-dark`（Mocha）
+
+深色主题沿用各配色方案的官方色值；卡片、三网历史条、图表和提示框都会跟随切换。页头保持亮色强调色底配深色字。所选配色会记在浏览器本地，下次打开时不会先闪白屏。
+
 ### 节点详情
 
 详情弹窗新增 BILLING & TRAFFIC 区块：价格、到期日、剩余天数、剩余价值、重置日、下次重置时间、剩余流量、日均可用。
+
+延迟图中丢包不再把曲线打断：曲线保持连续，丢包样本以对应任务颜色的短竖线标在横轴上。
 
 ## Installation
 
@@ -108,7 +119,7 @@ Settings are declared in `komari-theme.json` under `configuration` (`type: manag
 
 | Group | Key | Type | Default |
 | --- | --- | --- | --- |
-| Appearance | `accentColor` | select: yellow, red, blue, green, purple | `yellow` |
+| Appearance | `colorScheme` | select: yellow-light, red-light, blue-light, green-light, purple-light, tokyonight-dark, dracula-dark, monokai-dark, nord-dark, gruvbox-dark, catppuccin-dark | `yellow-light` |
 | Appearance | `cardStyle` | select: thick, thin, double | `thick` |
 | Appearance | `showUptime` | switch | on |
 | Appearance | `showLoginButton` | switch | on |

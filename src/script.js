@@ -52,7 +52,27 @@
 
   let requestId = 0;
 
-  const PING_COLORS = ['#FF3333', '#00A896', '#9B5DE5', '#0066FF', '#F59E0B', '#EC4899', '#10B981', '#F97316'];
+  const COLOR_SCHEMES = [
+    'yellow-light', 'red-light', 'blue-light', 'green-light', 'purple-light',
+    'tokyonight-dark', 'dracula-dark', 'monokai-dark', 'nord-dark', 'gruvbox-dark', 'catppuccin-dark'
+  ];
+  const SCHEME_STORAGE_KEY = 'komari1999.colorScheme';
+
+  function cssVar(name, fallback) {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return value || fallback;
+  }
+
+  // Chart palette follows the active colour scheme (read when a chart is built).
+  function pingColor(index) {
+    return cssVar(`--ping-${(index % 8) + 1}`, '#FF3333');
+  }
+
+  // Apply the last used scheme before data arrives so dark themes do not flash white.
+  try {
+    const savedScheme = localStorage.getItem(SCHEME_STORAGE_KEY);
+    if (COLOR_SCHEMES.includes(savedScheme)) document.documentElement.dataset.scheme = savedScheme;
+  } catch (e) { /* storage unavailable */ }
 
   // Helper: only scramble changed characters
   function scrambleTextIfChanged(element, finalText) {
@@ -282,6 +302,9 @@
   const MS_DAY = 86400000;
   const CARRIER_BAR_COUNT = 20;
   const CARRIER_REFRESH_MS = 60000;
+  // Komari snaps bucket width up to this ladder (pkg/metric/interval.go). 24h / 20 = 72min would
+  // become 2h (only 12 buckets -> 8 empty slots), so request the largest step that still fits in a slot.
+  const STANDARD_STEPS_S = [1, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400];
   const CARRIERS = [
     { key: 'ct', label: 'CT', title: '电信 China Telecom', setting: 'carrierCtTasks', match: [/电信/, /china\s*telecom/i, /\btelecom\b/i, /\bctcc\b/i, /\bchinanet\b/i, /\bcn2\b/i] },
     { key: 'cu', label: 'CU', title: '联通 China Unicom', setting: 'carrierCuTasks', match: [/联通/, /china\s*unicom/i, /\bunicom\b/i, /\bcucc\b/i] },
@@ -411,6 +434,8 @@
       return;
     }
     const hours = Math.min(720, Math.max(1, Number(getSetting('carrierPingHours', 24)) || 24));
+    const slotSeconds = hours * 3600 / CARRIER_BAR_COUNT;
+    const step = STANDARD_STEPS_S.filter(v => v <= slotSeconds).pop() || 1;
     try {
       const [tasks, result] = await Promise.all([
         rpcCall('public:getPublicPingTasks', {}).catch(() => []),
@@ -418,7 +443,7 @@
           metric_keys: ['ping.latency_ms', 'ping.loss'],
           entity_ids: Array.from(state.nodes.keys()),
           hours,
-          max_points: CARRIER_BAR_COUNT,
+          max_points: Math.ceil(hours * 3600 / step),
           aggregation: 'avg'
         })
       ]);
@@ -545,9 +570,9 @@
     if (settingOn('showBilling')) {
       const b = getBillingInfo(node);
       if (b) {
-        const value = b.status === 'expired' ? 'EXPIRED' : b.status === 'long' ? 'LONG-TERM' : `${b.days}D`;
+        const value = b.status === 'expired' ? 'EXPIRED' : b.status === 'long' ? '∞' : `${b.days}D`;
         const cls = b.status === 'expired' || b.status === 'crit' ? 'x-crit' : b.status === 'warn' ? 'x-warn' : '';
-        cells.push(xCell('EXPIRES', value, cls, new Date(b.expiry).toLocaleDateString()));
+        cells.push(xCell('EXPIRES', value, cls, b.status === 'long' ? 'Long-term' : new Date(b.expiry).toLocaleDateString()));
         if (canShowPrice() && (b.value != null || b.free)) {
           cells.push(xCell('VALUE', b.free ? 'FREE' : formatMoney(b.value, node.currency), '',
             b.free ? '' : `${formatMoney(b.price, node.currency)} / ${b.cycle > 0 ? b.cycle + 'D' : 'once'}`));
@@ -617,11 +642,14 @@
   }
 
   function applySettings() {
-    const accentColor = state.settings.accentColor || 'yellow';
+    const legacyAccent = state.settings.accentColor ? `${state.settings.accentColor}-light` : null;
+    const requested = state.settings.colorScheme || legacyAccent;
+    const scheme = COLOR_SCHEMES.includes(requested) ? requested : 'yellow-light';
     const cardStyle = state.settings.cardStyle || 'thick';
     const showUptime = state.settings.showUptime !== false;
 
-    document.documentElement.style.setProperty('--accent', `var(--accent-${accentColor})`);
+    document.documentElement.dataset.scheme = scheme;
+    try { localStorage.setItem(SCHEME_STORAGE_KEY, scheme); } catch (e) { /* storage unavailable */ }
 
     document.body.classList.remove('card-style-thin', 'card-style-double');
     if (cardStyle === 'thin') {
@@ -1011,6 +1039,8 @@
     const isOnline = node.online !== false && node.name !== undefined;
 
     existingCard.className = `node-card${isOnline ? '' : ' offline'}`;
+    const statusDot = existingCard.querySelector('.node-status');
+    if (statusDot) statusDot.classList.toggle('offline', !isOnline);
 
     // Update CPU
     const cpuValue = existingCard.querySelector('.metric:nth-child(1) .metric-value');
@@ -1212,6 +1242,8 @@
     const isOnline = node.online !== false && node.name !== undefined;
 
     row.className = `node-row${isOnline ? '' : ' offline'}`;
+    const rowStatus = row.querySelector('.row-status');
+    if (rowStatus) rowStatus.classList.toggle('offline', !isOnline);
 
     const updateMetric = (key, value, pct, fillClass) => {
       const valueEl = row.querySelector(`.row-${key} .row-metric-value`);
@@ -1697,14 +1729,14 @@
     return includeSeconds ? `${time}:${String(date.getSeconds()).padStart(2, '0')}` : time;
   }
 
-  function createSeries(name, color, data, areaOpacity = 0.16) {
+  function createSeries(name, color, data, areaOpacity = 0.16, connectNulls = false) {
     return {
     name,
     type: 'line',
     data,
     showSymbol: false,
     smooth: true,
-    connectNulls: false,
+    connectNulls,
     lineStyle: { width: 2, color },
     itemStyle: { color },
     areaStyle: areaOpacity ? { opacity: areaOpacity, color } : undefined,
@@ -1716,6 +1748,10 @@
     const timestamps = series.flatMap(item => item.data.map(point => point[0])).filter(Number.isFinite);
     const dataMin = timestamps.length ? Math.min(...timestamps) : null;
     const dataMax = timestamps.length ? Math.max(...timestamps) : null;
+    const ink = cssVar('--black', '#000');
+    const paper = cssVar('--white', '#fff');
+    const muted = cssVar('--chart-label', '#555');
+    const gridLine = cssVar('--grid-line', 'rgba(0, 0, 0, 0.12)');
     return {
     animation: false,
     backgroundColor: 'transparent',
@@ -1726,22 +1762,24 @@
       show: showLegend,
       top: 6,
       right: 12,
-      textStyle: { color: '#000', fontWeight: 700, fontSize: 11 }
+      textStyle: { color: ink, fontWeight: 700, fontSize: 11 }
     },
     tooltip: {
       trigger: 'axis',
       confine: true,
-      backgroundColor: '#fff',
-      borderColor: '#000',
+      backgroundColor: paper,
+      borderColor: ink,
       borderWidth: 2,
       padding: 0,
-      textStyle: { color: '#000', fontWeight: 700 },
-      axisPointer: { type: 'line', lineStyle: { color: '#000', type: 'dashed' } },
+      textStyle: { color: ink, fontWeight: 700 },
+      axisPointer: { type: 'line', lineStyle: { color: ink, type: 'dashed' } },
       formatter: params => {
         if (!params.length) return '';
         const timestamp = params[0].value[0];
-        const rows = params.map(item => `${item.marker}${item.seriesName}: ${formatter(item.value[1])}`);
-        return `<div style="background:#000;color:#fff;padding:6px 10px;font-weight:700">${formatChartTime(timestamp, hours, true)}</div><div style="padding:8px 10px;line-height:1.7">${rows.join('<br>')}</div>`;
+        const rows = params
+          .filter(item => item.seriesType !== 'scatter' && item.value[1] != null)
+          .map(item => `${item.marker}${item.seriesName}: ${formatter(item.value[1])}`);
+        return `<div style="background:${ink};color:${paper};padding:6px 10px;font-weight:700">${formatChartTime(timestamp, hours, true)}</div><div style="padding:8px 10px;line-height:1.7">${rows.join('<br>')}</div>`;
       }
     },
     xAxis: {
@@ -1751,11 +1789,11 @@
       max: dataMax == null ? undefined : dataMax,
       splitNumber,
       z: 10,
-      axisLine: { show: true, lineStyle: { color: '#000', width: 2 } },
+      axisLine: { show: true, lineStyle: { color: ink, width: 2 } },
       axisTick: { show: false },
-      splitLine: { show: true, lineStyle: { color: 'rgba(0, 0, 0, 0.12)', type: 'dashed' } },
+      splitLine: { show: true, lineStyle: { color: gridLine, type: 'dashed' } },
       axisLabel: {
-        color: '#555',
+        color: muted,
         fontSize: 10,
         fontWeight: 700,
         hideOverlap: true,
@@ -1768,10 +1806,10 @@
       max: yMax,
       splitNumber,
       z: 10,
-      axisLabel: { color: '#555', fontSize: 10, fontWeight: 700, formatter },
-      axisLine: { show: true, lineStyle: { color: '#000', width: 2 } },
+      axisLabel: { color: muted, fontSize: 10, fontWeight: 700, formatter },
+      axisLine: { show: true, lineStyle: { color: ink, width: 2 } },
       axisTick: { show: false },
-      splitLine: { lineStyle: { color: 'rgba(0, 0, 0, 0.12)', type: 'dashed' } }
+      splitLine: { lineStyle: { color: gridLine, type: 'dashed' } }
     },
     series,
     media: [
@@ -1803,21 +1841,24 @@
     const netDownData = history.map(h => toPoint(h, h.net_in ?? 0));
     const netUpData = history.map(h => toPoint(h, h.net_out ?? 0));
     const cpuData = history.map(h => toPoint(h, h.cpu ?? 0));
-    const ramData = history.map(h => toPoint(h, h.ram_total > 0 ? (h.ram / h.ram_total * 100) : 0));
-    const diskData = history.map(h => toPoint(h, h.disk_total > 0 ? (h.disk / h.disk_total * 100) : 0));
+    const liveNode = state.nodes.get(state.activeNodeUuid) || {};
+    const ramTotalOf = h => h.ram_total > 0 ? h.ram_total : (liveNode.ram_total || 0);
+    const diskTotalOf = h => h.disk_total > 0 ? h.disk_total : (liveNode.disk_total || 0);
+    const ramData = history.map(h => toPoint(h, ramTotalOf(h) > 0 ? (h.ram / ramTotalOf(h) * 100) : 0));
+    const diskData = history.map(h => toPoint(h, diskTotalOf(h) > 0 ? (h.disk / diskTotalOf(h) * 100) : 0));
     const connData = history.map(h => toPoint(h, h.connections ?? 0));
     const procData = history.map(h => toPoint(h, h.process ?? 0));
     const percentFormatter = value => `${Number(value).toFixed(0)}%`;
     const integerFormatter = value => Number(value).toFixed(0);
-    mountChart('cpu', '#chart-cpu', createChartOption([createSeries('CPU', '#E0C900', cpuData)], state.modalLoadTimeScale, percentFormatter, 100, false, 5));
-    mountChart('ram', '#chart-ram', createChartOption([createSeries('RAM', '#9B5DE5', ramData)], state.modalLoadTimeScale, percentFormatter, 100, false, 5));
-    mountChart('disk', '#chart-disk', createChartOption([createSeries('Disk', '#00A854', diskData)], state.modalLoadTimeScale, percentFormatter, 100, false, 5));
+    mountChart('cpu', '#chart-cpu', createChartOption([createSeries('CPU', cssVar('--chart-cpu', '#E0C900'), cpuData)], state.modalLoadTimeScale, percentFormatter, 100, false, 5));
+    mountChart('ram', '#chart-ram', createChartOption([createSeries('RAM', cssVar('--chart-ram', '#9B5DE5'), ramData)], state.modalLoadTimeScale, percentFormatter, 100, false, 5));
+    mountChart('disk', '#chart-disk', createChartOption([createSeries('Disk', cssVar('--chart-disk', '#00A854'), diskData)], state.modalLoadTimeScale, percentFormatter, 100, false, 5));
     mountChart('net', '#chart-net', createChartOption([
-      createSeries('Down', '#0066FF', netDownData),
-      createSeries('Up', '#00A854', netUpData)
+      createSeries('Down', cssVar('--chart-down', '#0066FF'), netDownData),
+      createSeries('Up', cssVar('--chart-up', '#00A854'), netUpData)
     ], state.modalLoadTimeScale, formatBytes, null, true));
-    mountChart('conn', '#chart-conn', createChartOption([createSeries('Connections', '#FF3333', connData)], state.modalLoadTimeScale, integerFormatter));
-    mountChart('proc', '#chart-proc', createChartOption([createSeries('Processes', '#0066FF', procData)], state.modalLoadTimeScale, integerFormatter));
+    mountChart('conn', '#chart-conn', createChartOption([createSeries('Connections', cssVar('--chart-conn', '#FF3333'), connData)], state.modalLoadTimeScale, integerFormatter));
+    mountChart('proc', '#chart-proc', createChartOption([createSeries('Processes', cssVar('--chart-proc', '#0066FF'), procData)], state.modalLoadTimeScale, integerFormatter));
 
 
   }
@@ -1844,9 +1885,9 @@
       const total = recs.length;
       const lossCount = recs.filter(r => typeof r.value === 'number' && r.value < 0).length;
       const loss = total > 0 ? (lossCount / total) * 100 : 0;
-      const latestRecord = recs[recs.length - 1];
-      const latestRaw = latestRecord ? latestRecord.value : null;
-      const latest = typeof latestRaw === 'number' && latestRaw >= 0 ? latestRaw : null;
+      // Last successful probe; a lost final sample should not blank the headline number.
+      const latestValid = recs.slice().reverse().find(r => typeof r.value === 'number' && r.value >= 0);
+      const latest = latestValid ? latestValid.value : null;
 
       const validValues = recs
         .map(r => r.value)
@@ -1884,7 +1925,7 @@
     if (!stats.length) { container.innerHTML = ''; return; }
 
     container.innerHTML = stats.map((task, index) => {
-      const color = colorByTaskId.get(String(task.id)) || PING_COLORS[index % PING_COLORS.length];
+      const color = colorByTaskId.get(String(task.id)) || pingColor(index);
       const lossText = `${task.loss.toFixed(1)}% LOSS`;
       const lossClass = task.loss > 0 ? 'has-loss' : '';
       const latestText = formatPing(task.latest);
@@ -1963,7 +2004,7 @@
     const stats = computeTaskStats(pingRecords, pingTasks);
     const colorByTaskId = new Map(stats.map((task, index) => [
       String(task.id),
-      PING_COLORS[index % PING_COLORS.length]
+      pingColor(index)
     ]));
     renderLatencyTasks(stats, colorByTaskId);
 
@@ -1990,12 +2031,26 @@
     Object.keys(pingGroups).forEach(taskId => {
       if (!orderedTaskIds.includes(taskId)) orderedTaskIds.push(taskId);
     });
-    const pingSeries = orderedTaskIds.map((taskId, index) => createSeries(
+    const lineSeries = orderedTaskIds.map((taskId, index) => createSeries(
       pingGroups[taskId].name,
-      colorByTaskId.get(taskId) || PING_COLORS[index % PING_COLORS.length],
+      colorByTaskId.get(taskId) || pingColor(index),
       pingGroups[taskId].data.sort((a, b) => a[0] - b[0]),
-      0.08
+      0.08,
+      true
     ));
+    // Lost probes: short ticks on the x axis in the task colour (index stays aligned with the task cards).
+    const lossSeries = orderedTaskIds.map((taskId, index) => ({
+      name: `${pingGroups[taskId].name} loss`,
+      type: 'scatter',
+      silent: true,
+      symbol: 'rect',
+      symbolSize: [2, 9],
+      symbolOffset: [0, -4],
+      itemStyle: { color: lineSeries[index].itemStyle.color },
+      tooltip: { show: false },
+      data: pingGroups[taskId].data.filter(point => point[1] == null).map(point => [point[0], 0])
+    })).filter(series => series.data.length);
+    const pingSeries = lineSeries.concat(lossSeries);
     if (pingSeries.length) {
       mountChart('ping', '#chart-ping', createChartOption(pingSeries, state.modalTimeScale, value => `${Number(value).toFixed(1)} ms`, null, false));
       bindLatencyTaskInteractions(state.charts.ping);

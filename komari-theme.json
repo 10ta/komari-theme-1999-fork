@@ -5,7 +5,7 @@
     "zh-CN": "Neo-Brutalism 风格 Komari 主题（Fork）：三网延迟与丢包、剩余天数与价值、流量重置日与日均可用流量",
     "en": "Neo-Brutalism dashboard for Komari Monitor (fork) with CT/CU/CM latency & loss, billing and traffic-plan info"
   },
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "ricebucket, 10ta",
   "url": "https://github.com/10ta/komari-theme-1999-fork",
   "preview": "static/cover-image.png",
@@ -14,8 +14,9 @@
     "name": { "zh-CN": "1999 主题设置", "en": "1999 Theme" },
     "data": [
       { "type": "title", "name": { "zh-CN": "外观", "en": "Appearance" } },
-      { "key": "accentColor", "type": "select", "options": "yellow,red,blue,green,purple", "default": "yellow",
-        "name": { "zh-CN": "强调色", "en": "Accent Color" }, "help": { "zh-CN": "页头与强调元素的主色", "en": "Primary accent color for the theme" } },
+      { "key": "colorScheme", "type": "select", "default": "yellow-light",
+        "options": "yellow-light,red-light,blue-light,green-light,purple-light,tokyonight-dark,dracula-dark,monokai-dark,nord-dark,gruvbox-dark,catppuccin-dark",
+        "name": { "zh-CN": "配色主题", "en": "Color Scheme" }, "help": { "zh-CN": "*-light 为浅色（只换强调色）；*-dark 为深色：Tokyo Night、Dracula、Monokai、Nord、Gruvbox、Catppuccin Mocha", "en": "*-light: light paper with an accent color. *-dark: Tokyo Night, Dracula, Monokai, Nord, Gruvbox, Catppuccin Mocha" } },
       { "key": "cardStyle", "type": "select", "options": "thick,thin,double", "default": "thick",
         "name": { "zh-CN": "卡片边框", "en": "Card Style" }, "help": { "zh-CN": "thick=粗边框；thin=细边框；double=双线", "en": "Border style for cards" } },
       { "key": "showUptime", "type": "switch", "default": true,
