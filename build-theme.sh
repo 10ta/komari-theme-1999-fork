@@ -1,8 +1,10 @@
 #!/bin/bash
 set -e
 
-VERSION=$(node -p "require('./package.json').version")
-OUTPUT="komari-theme-v${VERSION}.zip"
+# Single source of truth for name/version: komari-theme.json
+SHORT=$(node -p "require('./komari-theme.json').short")
+VERSION=$(node -p "require('./komari-theme.json').version")
+OUTPUT="${SHORT}-v${VERSION}.zip"
 
 echo "Building $OUTPUT..."
 
@@ -10,11 +12,7 @@ npm run build
 
 rm -f "$OUTPUT"
 
-# Pack root-level files first (flat) so the names sit at zip root.
-zip -j -X "$OUTPUT" komari-theme.json
-zip -j -X "$OUTPUT" static/cover-image.png
-
-# Pack the compiled output under dist/.
-zip -r -X "$OUTPUT" dist
+# komari-theme.json must sit at the zip root; keep static/ so "preview" resolves.
+zip -r -X "$OUTPUT" komari-theme.json static/cover-image.png dist
 
 echo "Created: $OUTPUT"

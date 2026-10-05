@@ -1,51 +1,54 @@
 {
-  "name": "Komari 1999",
-  "short": "komari-1999",
-  "description": "Neo-Brutalism themed dashboard for Komari Monitor",
-  "version": "1.0.1",
-  "author": "ricebucket",
-  "url": "https://github.com/r1cebucket/komari-theme-1999",
-  "preview": "./static/cover-image.png",
-  "managedConfig": [
-    {
-      "name": "Accent Color",
-      "key": "accentColor",
-      "type": "select",
-      "help": "Primary accent color for the theme",
-      "options": [
-        "yellow",
-        "red",
-        "blue",
-        "green",
-        "purple"
-      ],
-      "default": "yellow"
-    },
-    {
-      "name": "Card Style",
-      "key": "cardStyle",
-      "type": "select",
-      "help": "Border style for cards",
-      "options": [
-        "thick",
-        "thin",
-        "double"
-      ],
-      "default": "thick"
-    },
-    {
-      "name": "Show Uptime",
-      "key": "showUptime",
-      "type": "switch",
-      "help": "Display uptime on node cards",
-      "default": true
-    },
-    {
-      "name": "Show Login Button",
-      "key": "showLoginButton",
-      "type": "switch",
-      "help": "Display a login button when the visitor is not authenticated",
-      "default": true
-    }
-  ]
+  "name": "Komari 1999 (Fork)",
+  "short": "komari-1999-fork",
+  "description": {
+    "zh-CN": "Neo-Brutalism 风格 Komari 主题（Fork）：三网延迟与丢包、剩余天数与价值、流量重置日与日均可用流量",
+    "en": "Neo-Brutalism dashboard for Komari Monitor (fork) with CT/CU/CM latency & loss, billing and traffic-plan info"
+  },
+  "version": "1.1.0",
+  "author": "ricebucket, 10ta",
+  "url": "https://github.com/10ta/komari-theme-1999-fork",
+  "preview": "static/cover-image.png",
+  "configuration": {
+    "type": "managed",
+    "name": { "zh-CN": "1999 主题设置", "en": "1999 Theme" },
+    "data": [
+      { "type": "title", "name": { "zh-CN": "外观", "en": "Appearance" } },
+      { "key": "accentColor", "type": "select", "options": "yellow,red,blue,green,purple", "default": "yellow",
+        "name": { "zh-CN": "强调色", "en": "Accent Color" }, "help": { "zh-CN": "页头与强调元素的主色", "en": "Primary accent color for the theme" } },
+      { "key": "cardStyle", "type": "select", "options": "thick,thin,double", "default": "thick",
+        "name": { "zh-CN": "卡片边框", "en": "Card Style" }, "help": { "zh-CN": "thick=粗边框；thin=细边框；double=双线", "en": "Border style for cards" } },
+      { "key": "showUptime", "type": "switch", "default": true,
+        "name": { "zh-CN": "显示运行时间与网速", "en": "Show Uptime" }, "help": { "zh-CN": "节点卡片底部的上下行速度与运行时间", "en": "Display speed and uptime footer on node cards" } },
+      { "key": "showLoginButton", "type": "switch", "default": true,
+        "name": { "zh-CN": "显示登录按钮", "en": "Show Login Button" }, "help": { "zh-CN": "未登录时在页头显示登录入口", "en": "Display a login button when the visitor is not authenticated" } },
+
+      { "type": "title", "name": { "zh-CN": "三网延迟与丢包", "en": "CT / CU / CM Latency" } },
+      { "key": "carrierPingEnabled", "type": "switch", "default": true,
+        "name": { "zh-CN": "启用三网延迟", "en": "Enable carrier latency" }, "help": { "zh-CN": "在节点卡片与列表中显示电信/联通/移动的平均延迟、丢包和 20 格历史条", "en": "Show average latency, loss and a 20-segment history per carrier" } },
+      { "key": "carrierPingHours", "type": "number", "default": 24,
+        "name": { "zh-CN": "统计时长（小时）", "en": "Window (hours)" }, "help": { "zh-CN": "平均值与 20 格历史条覆盖的时间范围，1-720", "en": "Time range covered by averages and the 20 segments, 1-720" } },
+      { "type": "textbox", "name": { "zh-CN": "下面三个选择器全部留空时，按 Ping 任务名称自动识别（电信/telecom/ctcc/cn2、联通/unicom/cucc、移动/mobile/cmcc/cmi）；只要选了任意一个，就只使用所选任务。", "en": "Leave all three pickers empty to classify Ping tasks by name automatically. Once any picker has a selection, only the selected tasks are used." } },
+      { "key": "carrierCtTasks", "type": "pingtasks", "default": "[]",
+        "name": { "zh-CN": "电信 Ping 任务", "en": "China Telecom tasks" } },
+      { "key": "carrierCuTasks", "type": "pingtasks", "default": "[]",
+        "name": { "zh-CN": "联通 Ping 任务", "en": "China Unicom tasks" } },
+      { "key": "carrierCmTasks", "type": "pingtasks", "default": "[]",
+        "name": { "zh-CN": "移动 Ping 任务", "en": "China Mobile tasks" } },
+
+      { "type": "title", "name": { "zh-CN": "账单", "en": "Billing" } },
+      { "key": "showBilling", "type": "switch", "default": true,
+        "name": { "zh-CN": "显示剩余天数与剩余价值", "en": "Show days left & remaining value" }, "help": { "zh-CN": "读取节点的到期时间、价格和计费周期；剩余价值 = 价格 × 剩余天数 ÷ 计费周期", "en": "Remaining value = price × days left ÷ billing cycle" } },
+      { "key": "hidePriceWhenLoggedOut", "type": "switch", "default": false,
+        "name": { "zh-CN": "未登录隐藏价格", "en": "Hide prices when logged out" }, "help": { "zh-CN": "未登录访客看不到价格与剩余价值，剩余天数仍显示", "en": "Visitors still see days left" } },
+
+      { "type": "title", "name": { "zh-CN": "流量周期", "en": "Traffic Plan" } },
+      { "key": "showTrafficPlan", "type": "switch", "default": true,
+        "name": { "zh-CN": "显示重置日与日均可用流量", "en": "Show reset day & daily allowance" }, "help": { "zh-CN": "日均可用 = (流量上限 − 已用) ÷ 距下次重置的天数；未设置流量上限的节点只显示重置日", "en": "Daily allowance = (limit − used) ÷ days until next reset" } },
+      { "key": "trafficResetUtcOffset", "type": "number", "default": 0,
+        "name": { "zh-CN": "VPS 默认时区（UTC 偏移小时）", "en": "Default VPS timezone (UTC offset, hours)" }, "help": { "zh-CN": "agent 在 VPS 本地时间 0 点重置。UTC 填 0，Asia/Shanghai 填 8", "en": "The agent resets at local midnight on the VPS. UTC = 0, Asia/Shanghai = 8" } },
+      { "key": "trafficResetDays", "type": "richtext", "default": "",
+        "name": { "zh-CN": "各节点重置日（--month-rotate）", "en": "Reset day per node (--month-rotate)" }, "help": { "zh-CN": "每行一条：节点名=日，可选 @时区，例如 HK-1=5 或 US-2=15@-7。名称需与节点名完全一致；# 开头为注释。未列出的节点默认每月 1 号 0 点。必须与 agent 的 --month-rotate 参数一致，主题无法读取该参数", "en": "One per line: NodeName=DAY, optional @offset, e.g. HK-1=5 or US-2=15@-7. Unlisted nodes default to the 1st at 00:00. Must match the agent's --month-rotate flag" } }
+    ]
+  }
 }

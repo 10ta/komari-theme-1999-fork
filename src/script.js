@@ -18,7 +18,10 @@
     publicSettings: {},
     isLoggedIn: false,
     authForced: false,
-    authNeedsOtp: false
+    authNeedsOtp: false,
+    carrier: { byNode: new Map(), timer: null },
+    resetRulesRaw: null,
+    resetRules: new Map()
   };
 
   const elements = {
@@ -275,6 +278,344 @@
     }
   }
 
+  // ===== Fork extras: CT/CU/CM latency, billing, traffic plan =====
+  const MS_DAY = 86400000;
+  const CARRIER_BAR_COUNT = 20;
+  const CARRIER_REFRESH_MS = 60000;
+  const CARRIERS = [
+    { key: 'ct', label: 'CT', title: '电信 China Telecom', setting: 'carrierCtTasks', match: [/电信/, /china\s*telecom/i, /\btelecom\b/i, /\bctcc\b/i, /\bchinanet\b/i, /\bcn2\b/i] },
+    { key: 'cu', label: 'CU', title: '联通 China Unicom', setting: 'carrierCuTasks', match: [/联通/, /china\s*unicom/i, /\bunicom\b/i, /\bcucc\b/i] },
+    { key: 'cm', label: 'CM', title: '移动 China Mobile', setting: 'carrierCmTasks', match: [/移动/, /china\s*mobile/i, /\bmobile\b/i, /\bcmcc\b/i, /\bcmi\b/i, /\bcmin2\b/i] }
+  ];
+
+  function getSetting(key, fallback) {
+    const value = state.settings ? state.settings[key] : undefined;
+    return value === undefined || value === null || value === '' ? fallback : value;
+  }
+
+  function settingOn(key, fallback = true) {
+    const value = getSetting(key, fallback);
+    return value === true || value === 'true';
+  }
+
+  function canShowPrice() {
+    return !(settingOn('hidePriceWhenLoggedOut', false) && !state.isLoggedIn);
+  }
+
+  function parseIdList(value) {
+    let list = value;
+    if (typeof list === 'string') {
+      try { list = JSON.parse(list); } catch (e) { list = list.split(/[\s,]+/); }
+    }
+    return Array.isArray(list) ? list.map(Number).filter(Number.isFinite) : [];
+  }
+
+  // Pickers win when any is filled; otherwise classify by task name.
+  function resolveCarrierTasks(tasks) {
+    const byTask = new Map();
+    const picked = CARRIERS.map(c => parseIdList(getSetting(c.setting, [])));
+    if (picked.some(list => list.length)) {
+      CARRIERS.forEach((c, i) => picked[i].forEach(id => byTask.set(id, c)));
+    } else {
+      (tasks || []).forEach(task => {
+        const carrier = CARRIERS.find(c => c.match.some(re => re.test(task.name || '')));
+        if (carrier) byTask.set(Number(task.id), carrier);
+      });
+    }
+    return byTask;
+  }
+
+  function seriesTaskId(series) {
+    const tags = series.tags || (series.points && series.points[0] && series.points[0].tags) || {};
+    return Number(tags.task_id);
+  }
+
+  // Rollup "avg" of ping.latency_ms includes -1 for lost probes and ping.loss is a 0/1 indicator,
+  // so true latency = (avg + loss) / (1 - loss) and valid samples = count * (1 - loss).
+  function buildCarrierStats(seriesList, tasks, hours) {
+    const carrierByTask = resolveCarrierTasks(tasks);
+    const taskNames = new Map((tasks || []).map(t => [Number(t.id), t.name]));
+    const end = Date.now();
+    const start = end - hours * 3600000;
+    const slotMs = (end - start) / CARRIER_BAR_COUNT;
+    const perTask = new Map();
+
+    (seriesList || []).forEach(series => {
+      const taskId = seriesTaskId(series);
+      if (!carrierByTask.has(taskId) || !series.entity_id) return;
+      const isLoss = series.metric_key === 'ping.loss';
+      if (!isLoss && series.metric_key !== 'ping.latency_ms') return;
+      const key = `${series.entity_id}|${taskId}`;
+      if (!perTask.has(key)) {
+        perTask.set(key, { uuid: series.entity_id, taskId, slots: Array.from({ length: CARRIER_BAR_COUNT }, () => ({ a: 0, an: 0, l: 0, ln: 0 })) });
+      }
+      const slots = perTask.get(key).slots;
+      (series.points || []).forEach(point => {
+        const t = Date.parse(point.time);
+        if (point.value == null || !Number.isFinite(t) || t < start - slotMs || t > end) return;
+        const slot = slots[Math.min(CARRIER_BAR_COUNT - 1, Math.max(0, Math.floor((t - start) / slotMs)))];
+        const n = point.count > 0 ? point.count : 1;
+        if (isLoss) { slot.l += point.value * n; slot.ln += n; } else { slot.a += point.value * n; slot.an += n; }
+      });
+    });
+
+    const byNode = new Map();
+    perTask.forEach(({ uuid, taskId, slots }) => {
+      const carrier = carrierByTask.get(taskId);
+      if (!byNode.has(uuid)) byNode.set(uuid, new Map());
+      const carriers = byNode.get(uuid);
+      if (!carriers.has(carrier.key)) {
+        carriers.set(carrier.key, { carrier, tasks: new Set(), slots: Array.from({ length: CARRIER_BAR_COUNT }, () => ({ latW: 0, valid: 0, lossW: 0, total: 0 })) });
+      }
+      const agg = carriers.get(carrier.key);
+      agg.tasks.add(taskNames.get(taskId) || `Task ${taskId}`);
+      slots.forEach((s, i) => {
+        if (!s.an && !s.ln) return;
+        const avg = s.an ? s.a / s.an : null;
+        const loss = s.ln ? Math.min(1, Math.max(0, s.l / s.ln)) : (avg != null && avg < 0 ? 1 : 0);
+        const total = s.ln || s.an;
+        const target = agg.slots[i];
+        target.lossW += loss * total;
+        target.total += total;
+        if (avg != null && loss < 1) {
+          const latency = s.ln ? (avg + loss) / (1 - loss) : avg;
+          const valid = s.an * (1 - loss);
+          if (latency >= 0 && valid > 0) { target.latW += latency * valid; target.valid += valid; }
+        }
+      });
+    });
+
+    const result = new Map();
+    byNode.forEach((carriers, uuid) => {
+      const list = CARRIERS.filter(c => carriers.has(c.key)).map(c => {
+        const agg = carriers.get(c.key);
+        let latW = 0, valid = 0, lossW = 0, total = 0;
+        const slots = agg.slots.map((s, i) => {
+          latW += s.latW; valid += s.valid; lossW += s.lossW; total += s.total;
+          if (!s.total) return null;
+          return { start: start + slotMs * i, end: start + slotMs * (i + 1), lat: s.valid ? s.latW / s.valid : null, loss: s.lossW / s.total * 100 };
+        });
+        return { ...c, taskNames: Array.from(agg.tasks), latency: valid ? latW / valid : null, loss: total ? lossW / total * 100 : null, slots };
+      }).filter(c => c.loss != null);
+      if (list.length) result.set(uuid, list);
+    });
+    return result;
+  }
+
+  async function fetchCarrierPing() {
+    if (!settingOn('carrierPingEnabled') || state.nodes.size === 0) {
+      if (state.carrier.byNode.size) {
+        state.carrier.byNode = new Map();
+        refreshAllExtras();
+      }
+      return;
+    }
+    const hours = Math.min(720, Math.max(1, Number(getSetting('carrierPingHours', 24)) || 24));
+    try {
+      const [tasks, result] = await Promise.all([
+        rpcCall('public:getPublicPingTasks', {}).catch(() => []),
+        rpcCall('public:queryMetrics', {
+          metric_keys: ['ping.latency_ms', 'ping.loss'],
+          entity_ids: Array.from(state.nodes.keys()),
+          hours,
+          max_points: CARRIER_BAR_COUNT,
+          aggregation: 'avg'
+        })
+      ]);
+      state.carrier.byNode = buildCarrierStats(result && result.series, Array.isArray(tasks) ? tasks : [], hours);
+      refreshAllExtras();
+    } catch (e) {
+      console.warn('[Komari Theme] Carrier latency unavailable:', e);
+    }
+  }
+
+  function startCarrierPolling() {
+    if (state.carrier.timer) clearInterval(state.carrier.timer);
+    fetchCarrierPing();
+    state.carrier.timer = setInterval(fetchCarrierPing, CARRIER_REFRESH_MS);
+  }
+
+  function latencyTone(ms) {
+    return ms <= 60 ? 1 : ms <= 100 ? 2 : ms <= 160 ? 3 : ms <= 200 ? 4 : 5;
+  }
+
+  function lossTone(pct) {
+    return pct <= 1 ? 1 : pct <= 3 ? 2 : pct <= 6 ? 3 : pct <= 9 ? 4 : 5;
+  }
+
+  function formatClock(ts) {
+    const d = new Date(ts);
+    return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
+  function buildCarrierHtml(uuid) {
+    if (!settingOn('carrierPingEnabled')) return '';
+    const carriers = state.carrier.byNode.get(uuid);
+    if (!carriers || !carriers.length) return '';
+    return `<div class="x-carriers">${carriers.map(c => {
+      const segs = c.slots.map(s => {
+        if (!s) return '<i class="x-seg x-seg-empty" title="No samples"></i>';
+        const latClass = s.lat == null ? 'lat-5' : `lat-${latencyTone(s.lat)}`;
+        const lossClass = s.loss > 1 ? ` loss-${lossTone(s.loss)}` : '';
+        const tip = `${c.label} ${formatClock(s.start)} – ${formatClock(s.end)}\n${s.lat == null ? 'no reply' : Math.round(s.lat) + ' ms'} · loss ${s.loss.toFixed(1)}%`;
+        return `<i class="x-seg ${latClass}${lossClass}" title="${escapeHtml(tip)}"></i>`;
+      }).join('');
+      const latText = c.latency == null ? '--' : `${Math.round(c.latency)}ms`;
+      return `<div class="x-carrier">
+        <span class="x-carrier-label x-${c.key}" title="${escapeHtml(`${c.title}\n${c.taskNames.join(' / ')}`)}">${c.label}</span>
+        <span class="x-carrier-num">${latText}</span>
+        <span class="x-strip">${segs}</span>
+        <span class="x-carrier-num${c.loss > 1 ? ' x-lossy' : ''}">${c.loss.toFixed(1)}%</span>
+      </div>`;
+    }).join('')}</div>`;
+  }
+
+  function getBillingInfo(node, now = Date.now()) {
+    const expiry = node.expired_at ? Date.parse(node.expired_at) : NaN;
+    if (!Number.isFinite(expiry) || new Date(expiry).getUTCFullYear() < 1971) return null;
+    const diff = expiry - now;
+    const days = diff > 0 ? Math.ceil(diff / MS_DAY) : 0;
+    const status = diff <= 0 ? 'expired' : days > 36500 ? 'long' : days <= 5 ? 'crit' : days <= 10 ? 'warn' : 'ok';
+    const price = Number(node.price) || 0;
+    const cycle = Number(node.billing_cycle) || 0;
+    let value = null;
+    if (price > 0) value = status === 'expired' ? 0 : (status === 'long' || cycle <= 0) ? price : price * days / cycle;
+    return { expiry, days, status, price, cycle, value, free: price === -1 };
+  }
+
+  function formatMoney(amount, currency) {
+    return `${currency || ''}${amount.toFixed(2)}`;
+  }
+
+  function parseResetRules() {
+    const raw = String(getSetting('trafficResetDays', ''));
+    if (raw === state.resetRulesRaw) return state.resetRules;
+    const rules = new Map();
+    raw.split(/\r?\n/).forEach(line => {
+      const text = line.trim();
+      if (!text || text.startsWith('#')) return;
+      const match = text.match(/^(.+?)\s*=\s*(\d{1,2})(?:\s*@\s*([+-]?\d+(?:\.\d+)?))?$/);
+      if (!match) return;
+      const day = Number(match[2]);
+      if (day < 1 || day > 31) return;
+      rules.set(match[1].trim(), { day, offset: match[3] != null ? Number(match[3]) : null });
+    });
+    state.resetRulesRaw = raw;
+    state.resetRules = rules;
+    return rules;
+  }
+
+  // Same rule as komari-agent: a day missing from the month rolls over to the 1st of the next month.
+  function resetInstant(year, month, day, offsetMs) {
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const ts = day <= lastDay ? Date.UTC(year, month, day) : Date.UTC(year, month + 1, 1);
+    return ts - offsetMs;
+  }
+
+  function getTrafficPlan(node, now = Date.now()) {
+    const rule = parseResetRules().get(node.name) || {};
+    const day = rule.day || 1;
+    const offsetH = rule.offset != null ? rule.offset : (Number(getSetting('trafficResetUtcOffset', 0)) || 0);
+    const offsetMs = offsetH * 3600000;
+    const local = new Date(now + offsetMs);
+    let next = resetInstant(local.getUTCFullYear(), local.getUTCMonth(), day, offsetMs);
+    if (next <= now) next = resetInstant(local.getUTCFullYear(), local.getUTCMonth() + 1, day, offsetMs);
+    const daysLeft = Math.max(1, Math.ceil((next - now) / MS_DAY));
+    const limit = node.traffic_limit || 0;
+    const used = limit > 0 ? getNetTotalByType(node) : (node.net_total_up || 0) + (node.net_total_down || 0);
+    const remaining = limit > 0 ? Math.max(0, limit - used) : null;
+    return { day, offsetH, custom: Boolean(rule.day), next, daysLeft, limit, used, remaining, perDay: remaining == null ? null : remaining / daysLeft };
+  }
+
+  function ordinal(n) {
+    const suffix = (n % 100 >= 11 && n % 100 <= 13) ? 'TH' : ({ 1: 'ST', 2: 'ND', 3: 'RD' }[n % 10] || 'TH');
+    return `${n}${suffix}`;
+  }
+
+  function formatOffset(h) {
+    return `UTC${h >= 0 ? '+' : ''}${h}`;
+  }
+
+  function xCell(label, value, cls = '', title = '') {
+    return `<div class="x-cell${cls ? ' ' + cls : ''}"${title ? ` title="${escapeHtml(title)}"` : ''}><span class="x-label">${escapeHtml(label)}</span><span class="x-value">${escapeHtml(value)}</span></div>`;
+  }
+
+  function buildExtrasHtml(node) {
+    const cells = [];
+    if (settingOn('showBilling')) {
+      const b = getBillingInfo(node);
+      if (b) {
+        const value = b.status === 'expired' ? 'EXPIRED' : b.status === 'long' ? 'LONG-TERM' : `${b.days}D`;
+        const cls = b.status === 'expired' || b.status === 'crit' ? 'x-crit' : b.status === 'warn' ? 'x-warn' : '';
+        cells.push(xCell('EXPIRES', value, cls, new Date(b.expiry).toLocaleDateString()));
+        if (canShowPrice() && (b.value != null || b.free)) {
+          cells.push(xCell('VALUE', b.free ? 'FREE' : formatMoney(b.value, node.currency), '',
+            b.free ? '' : `${formatMoney(b.price, node.currency)} / ${b.cycle > 0 ? b.cycle + 'D' : 'once'}`));
+        }
+      }
+    }
+    if (settingOn('showTrafficPlan')) {
+      const t = getTrafficPlan(node);
+      cells.push(xCell(`RESET ${ordinal(t.day)}`, `${t.daysLeft}D`, '',
+        `Next reset ${new Date(t.next).toLocaleString()} (VPS ${formatOffset(t.offsetH)})${t.custom ? '' : ' · default'}`));
+      if (t.perDay != null) {
+        cells.push(xCell('PER DAY', formatBytes(Math.floor(t.perDay)), t.remaining === 0 ? 'x-crit' : '',
+          `${formatBytes(t.remaining)} left of ${formatBytes(t.limit)} for ${t.daysLeft} day(s)`));
+      }
+    }
+    const kv = cells.length ? `<div class="x-kv">${cells.join('')}</div>` : '';
+    return kv + buildCarrierHtml(node.uuid);
+  }
+
+  function renderExtras(root, node) {
+    const box = root && root.querySelector('.node-extras');
+    if (!box) return;
+    const html = buildExtrasHtml(node);
+    if (box.dataset.html === html) return;
+    box.dataset.html = html;
+    box.innerHTML = html;
+    box.hidden = !html;
+  }
+
+  function refreshAllExtras() {
+    if (!elements.container) return;
+    state.nodes.forEach((node, uuid) => {
+      const el = elements.container.querySelector(`[data-uuid="${uuid}"]`);
+      if (el) renderExtras(el, node);
+    });
+  }
+
+  function buildModalBillingHtml(node) {
+    const item = (label, value) => `<div class="info-item"><span class="info-label">${escapeHtml(label)}</span><span class="info-value">${escapeHtml(value)}</span></div>`;
+    const items = [];
+    if (settingOn('showBilling')) {
+      const b = getBillingInfo(node);
+      if (canShowPrice() && (node.price > 0 || node.price === -1)) {
+        items.push(item('Price', node.price === -1 ? 'Free' : `${formatMoney(node.price, node.currency)} / ${node.billing_cycle > 0 ? node.billing_cycle + ' days' : 'once'}`));
+      }
+      if (b) {
+        items.push(item('Expires', b.status === 'long' ? 'Long-term' : new Date(b.expiry).toLocaleDateString()));
+        items.push(item('Days Left', b.status === 'expired' ? 'Expired' : b.status === 'long' ? '∞' : `${b.days}`));
+        if (canShowPrice() && b.value != null) items.push(item('Remaining Value', formatMoney(b.value, node.currency)));
+      }
+    }
+    if (settingOn('showTrafficPlan')) {
+      const t = getTrafficPlan(node);
+      items.push(item('Traffic Reset', `Day ${t.day} · VPS ${formatOffset(t.offsetH)}${t.custom ? '' : ' (default)'}`));
+      items.push(item('Next Reset', `${new Date(t.next).toLocaleString()} (${t.daysLeft}d)`));
+      if (t.remaining != null) {
+        items.push(item('Traffic Left', `${formatBytes(t.remaining)} / ${formatBytes(t.limit)}`));
+        items.push(item('Per Day', formatBytes(Math.floor(t.perDay))));
+      }
+    }
+    if (!items.length) return '';
+    return `
+        <div class="modal-info-section modal-billing-section">
+          <h3 class="modal-info-section-title">BILLING &amp; TRAFFIC</h3>
+          <div class="modal-info-grid modal-billing-grid">${items.join('')}</div>
+        </div>`;
+  }
+
   function applySettings() {
     const accentColor = state.settings.accentColor || 'yellow';
     const cardStyle = state.settings.cardStyle || 'thick';
@@ -292,6 +633,8 @@
     document.querySelectorAll('.node-footer').forEach(el => {
       el.style.display = showUptime ? '' : 'none';
     });
+
+    refreshAllExtras();
   }
 
   async function rpcCall(method, params) {
@@ -449,6 +792,7 @@
       document.body.style.overflow = '';
       await fetchNodesAndStatus();
       startPolling();
+      startCarrierPolling();
     } catch (error) {
       elements.authMessage.textContent = state.authNeedsOtp
         ? 'INVALID VERIFICATION CODE. TRY AGAIN.'
@@ -492,6 +836,10 @@
             virtualization: client.virtualization || '',
             kernel_version: client.kernel_version || '',
             gpu_name: client.gpu_name || '',
+            price: Number(client.price) || 0,
+            billing_cycle: Number(client.billing_cycle) || 0,
+            currency: client.currency || '',
+            expired_at: client.expired_at || null,
             online: status ? status.online : false,
             cpu: status ? (status.cpu || 0) : 0,
             ram: status ? (status.ram || 0) : 0,
@@ -626,6 +974,7 @@
           </div>
         </div>
       </div>
+      <div class="node-extras" hidden></div>
       <div class="node-footer">
         <div class="footer-stat">
           <span data-prev="${upSpeedText}">${upSpeedText}</span>
@@ -641,6 +990,8 @@
         </div>
       </div>
     `;
+
+    renderExtras(card, node);
 
     card.addEventListener('click', (e) => {
       if (e.target.tagName === 'A') return;
@@ -755,6 +1106,8 @@
     if (netUp) scrambleTextIfChanged(netUp, newUpSpeedText);
     if (netDown) scrambleTextIfChanged(netDown, newDownSpeedText);
     if (uptime) scrambleTextIfChanged(uptime, newUptimeText);
+
+    renderExtras(existingCard, node);
   }
 
   function createNodeListItem(node) {
@@ -839,7 +1192,10 @@
           <span class="row-speed-value" data-prev="${downSpeedText}">${downSpeedText}</span>
         </div>
       </div>
+      <div class="node-extras" hidden></div>
     `;
+
+    renderExtras(row, node);
 
     row.addEventListener('click', (e) => {
       if (e.target.tagName === 'A') return;
@@ -914,6 +1270,8 @@
     if (upValue) scrambleTextIfChanged(upValue, isOnline ? formatNetworkSpeed(node.net_out || 0) : '-');
     if (downValue) scrambleTextIfChanged(downValue, isOnline ? formatNetworkSpeed(node.net_in || 0) : '-');
     if (upSpan) scrambleTextIfChanged(upSpan, isOnline ? formatUptime(node.uptime) : '-');
+
+    renderExtras(row, node);
   }
 
   function render() {
@@ -1120,6 +1478,7 @@
             <strong>${node.connections || 0} TCP · ${node.connections_udp || 0} UDP</strong>
           </div>
         </div>
+        ${buildModalBillingHtml(node)}
       </div>
 
       <section class="modal-chart-section modal-load-section">
@@ -1769,6 +2128,7 @@
       }
       await fetchNodesAndStatus();
       startPolling();
+      startCarrierPolling();
     });
   }
 

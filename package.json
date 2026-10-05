@@ -1,7 +1,7 @@
 {
-  "name": "komari-1999",
-  "version": "1.0.1",
-  "description": "Neo-Brutalism themed dashboard for Komari Monitor",
+  "name": "komari-1999-fork",
+  "private": true,
+  "description": "Neo-Brutalism themed dashboard for Komari Monitor (fork). Version lives in komari-theme.json.",
   "scripts": {
     "build": "mkdir -p dist && cp src/index.html src/styles.css src/script.js dist/",
     "package": "./build-theme.sh",
@@ -12,5 +12,6 @@
     "email": "ricebucket.mail@gmail.com",
     "url": "https://github.com/r1cebucket"
   },
+  "contributors": ["10ta (https://github.com/10ta)"],
   "license": "MIT"
 }

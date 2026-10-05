@@ -2051,3 +2051,193 @@ h1, h2, h3, h4, h5, h6 {
 .auth-oauth > a {
   grid-row: 2;
 }
+
+/* === Fork extras: billing, traffic plan, CT/CU/CM latency === */
+:root {
+  --sig-1: #00CC66;
+  --sig-2: #8FD14F;
+  --sig-3: #FFE600;
+  --sig-4: #FF9F1C;
+  --sig-5: #FF3333;
+}
+
+.node-extras {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.node-extras[hidden] {
+  display: none;
+}
+
+.x-kv {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  border: 2px solid var(--black);
+  background: var(--bg);
+}
+
+.x-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 0.3rem 0.45rem;
+}
+
+.x-cell + .x-cell {
+  border-left: 2px solid var(--black);
+}
+
+.x-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.x-value,
+.x-carrier-num {
+  font-family: 'SF Mono', 'Consolas', 'Monaco', 'Space Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.x-value {
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.x-cell.x-warn {
+  background: var(--accent-yellow);
+}
+
+.x-cell.x-crit {
+  background: var(--accent-red);
+  color: var(--white);
+}
+
+.x-cell.x-warn .x-label,
+.x-cell.x-crit .x-label {
+  color: inherit;
+}
+
+.x-carriers {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.x-carrier {
+  display: grid;
+  grid-template-columns: 2.1rem 3.3rem minmax(0, 1fr) 3.1rem;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.x-carrier-label {
+  font-family: 'Archivo Black', sans-serif;
+  font-size: 0.6rem;
+  line-height: 1.4;
+  text-align: center;
+  border: 2px solid var(--black);
+  cursor: help;
+}
+
+.x-ct { background: var(--accent-blue); color: var(--white); }
+.x-cu { background: var(--accent-red); color: var(--white); }
+.x-cm { background: var(--accent-green); color: var(--black); }
+
+.x-carrier-num {
+  font-size: 0.72rem;
+  text-align: right;
+}
+
+.x-carrier-num.x-lossy {
+  color: var(--accent-red);
+}
+
+.x-strip {
+  display: grid;
+  grid-template-columns: repeat(20, minmax(0, 1fr));
+  gap: 1px;
+  height: 14px;
+  border: 2px solid var(--black);
+  background: var(--black);
+}
+
+.x-seg {
+  display: block;
+  background: var(--bg);
+}
+
+.x-seg-empty {
+  background: repeating-linear-gradient(45deg, var(--bg) 0 2px, #c8c8c8 2px 3px);
+}
+
+.x-seg.lat-1 { background: var(--sig-1); }
+.x-seg.lat-2 { background: var(--sig-2); }
+.x-seg.lat-3 { background: var(--sig-3); }
+.x-seg.lat-4 { background: var(--sig-4); }
+.x-seg.lat-5 { background: var(--sig-5); }
+
+/* Loss marker: a bottom band, separated from the latency color by a 1px black line. */
+.x-seg.loss-2 { box-shadow: inset 0 -4px 0 var(--sig-3), inset 0 -5px 0 var(--black); }
+.x-seg.loss-3 { box-shadow: inset 0 -4px 0 var(--sig-4), inset 0 -5px 0 var(--black); }
+.x-seg.loss-4,
+.x-seg.loss-5 { box-shadow: inset 0 -4px 0 var(--sig-5), inset 0 -5px 0 var(--black); }
+
+/* List view: extras become a second line under the metrics. */
+.node-row .node-extras {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-top: 0.5rem;
+  padding: 0.45rem 0.65rem 0;
+  border-top: 2px dashed var(--black);
+}
+
+.node-row .x-kv {
+  grid-auto-columns: auto;
+}
+
+.node-row .x-cell {
+  min-width: 4.5rem;
+}
+
+.node-row .x-carriers {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+}
+
+.node-row .x-carrier {
+  grid-template-columns: 2.1rem 3.3rem 8rem 3.1rem;
+}
+
+/* Modal billing section spans the full info row. */
+.modal-billing-section {
+  grid-column: 1 / -1;
+}
+
+.modal-billing-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 680px) {
+  .modal-billing-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
