@@ -619,6 +619,20 @@
     return Math.max(1, Math.floor(target));
   }
 
+  // Let the browser resolve a CSS colour (vars, color-mix) in the element's context, as rgb() for canvas.
+  function resolveColor(context, value, fallback) {
+    const probe = document.createElement('span');
+    probe.style.color = value;
+    probe.style.display = 'none';
+    context.appendChild(probe);
+    const computed = getComputedStyle(probe).color;
+    probe.remove();
+    const nums = (computed.match(/[\d.]+/g) || []).map(Number);
+    if (nums.length < 3) return fallback;
+    const [r, g, b] = computed.startsWith('color(') ? nums.slice(0, 3).map(v => Math.round(v * 255)) : nums.slice(0, 3);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
   function snapStrip(track, width) {
     const strip = track.querySelector('.x-strip');
     if (!strip || !(width > 0)) return;
@@ -646,8 +660,8 @@
 
     const css = getComputedStyle(strip);
     const tone = name => css.getPropertyValue(name).trim();
-    const frame = tone('--black') || '#000';
-    const ink = tone('--strip-gap') || frame;
+    const frame = resolveColor(strip, 'var(--black)', '#000');    // outer frame = ink, like other boxes
+    const ink = resolveColor(strip, 'var(--strip-line)', frame);  // thin inner lines, one step softer
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = frame;
     ctx.fillRect(0, 0, W, H);

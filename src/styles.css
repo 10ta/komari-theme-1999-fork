@@ -62,6 +62,8 @@
   --dots: rgba(102, 102, 102, 0.3);
   --grid-line: rgba(0, 0, 0, 0.12);
   --chart-label: #555555;
+  /* Thin lines inside the latency strip: one step softer than the ink frame, in every scheme. */
+  --strip-line: color-mix(in srgb, var(--black) 40%, var(--card-bg));
   --row-hover: rgba(255, 230, 0, 0.08);
 
   --sig-1: #00CC66;
@@ -111,7 +113,6 @@
   --dots: rgba(255, 255, 255, 0.10);
   --grid-line: rgba(255, 255, 255, 0.10);
   --chart-label: var(--text-muted);
-  --strip-gap: var(--bg);
   --row-hover: color-mix(in srgb, var(--accent) 10%, transparent);
 
   --sig-1: var(--accent-green);
@@ -2405,7 +2406,7 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   height: 16px;
   border: 2px solid var(--black);
-  background: var(--strip-gap, var(--black));
+  background: var(--strip-line);
 }
 
 /* Separators are borders, not layout gaps: browsers snap border widths to whole device pixels,
@@ -2415,7 +2416,7 @@ h1, h2, h3, h4, h5, h6 {
   flex: 1 1 0;
   min-width: 0;
   background: var(--bg);
-  border-left: 2px solid var(--strip-gap, var(--black));
+  border-left: 2px solid var(--strip-line);
 }
 
 .x-seg:first-child {
@@ -2433,10 +2434,10 @@ h1, h2, h3, h4, h5, h6 {
 .x-seg.lat-5 { background: var(--sig-5); }
 
 /* Loss marker: a 4px bottom band under a 2px divider (same weight as every other line). */
-.x-seg.loss-2 { box-shadow: inset 0 -4px 0 var(--sig-3), inset 0 -6px 0 var(--strip-gap, var(--black)); }
-.x-seg.loss-3 { box-shadow: inset 0 -4px 0 var(--sig-4), inset 0 -6px 0 var(--strip-gap, var(--black)); }
+.x-seg.loss-2 { box-shadow: inset 0 -4px 0 var(--sig-3), inset 0 -6px 0 var(--strip-line); }
+.x-seg.loss-3 { box-shadow: inset 0 -4px 0 var(--sig-4), inset 0 -6px 0 var(--strip-line); }
 .x-seg.loss-4,
-.x-seg.loss-5 { box-shadow: inset 0 -4px 0 var(--sig-5), inset 0 -6px 0 var(--strip-gap, var(--black)); }
+.x-seg.loss-5 { box-shadow: inset 0 -4px 0 var(--sig-5), inset 0 -6px 0 var(--strip-line); }
 
 /* List view: extras form two aligned lines on the row's own columns (subgrid).
    Line 1: EXPIRES | VALUE | RESET | PER DAY under CPU | RAM | DISK | NET.
