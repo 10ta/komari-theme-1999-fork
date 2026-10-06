@@ -25,7 +25,8 @@ Fork of [r1cebucket/komari-theme-1999](https://github.com/r1cebucket/komari-them
 
 节点卡片和列表中按 **CT 电信 / CU 联通 / CM 移动** 显示平均延迟、平均丢包，以及一条 20 格历史条：格子颜色表示该时段延迟（≤60 / 100 / 160 / 200 ms 分档），底部色带表示丢包（>1% 才显示），悬停可看具体时段数值，斜纹格表示该时段无采样。
 
-- 历史条用 canvas 按屏幕物理像素绘制，在 100%、125%、150% 等任意系统缩放下，所有分隔线粗细完全一致（统一为 2px，与其他边框相同）。
+- 历史条用 canvas 按屏幕物理像素绘制：外框 2px 粗线、格间 1px 细线，在 100%、125%、150% 等任意系统缩放下粗细完全一致；有丢包的格子上下两半等高，分隔线居中；条在两侧数字之间左右对称。
+- 延迟与丢包数字按同一档位着色，浅色主题用加深色、深色主题用提亮色，所有配色下对比度均 ≥ 4.5:1。
 - 数据来自一次 `public:queryMetrics` 调用（所有节点一起取，每 60 秒刷新），不随实时轮询重复请求。
 - Komari 的 Ping 汇总把丢包样本记为 −1 计入平均值，主题会按同时段丢包率还原真实延迟，避免丢包时延迟被低估。
 - 任务归类：后台三个 Ping 任务选择器全部留空时，按任务名自动识别（电信/telecom/ctcc/chinanet/cn2、联通/unicom/cucc、移动/mobile/cmcc/cmi/cmin2）；只要选了任意一个，就只使用所选任务。
@@ -67,6 +68,10 @@ Fork of [r1cebucket/komari-theme-1999](https://github.com/r1cebucket/komari-them
 - 两排统计等高，网速在一行内显示。
 - 屏幕宽度 ≤768px 时隐藏地图，恢复原来的统计布局。
 - Windows 自带字体不显示国旗，主题内置了 Twemoji 国旗字体，只作用于国旗字符。
+
+### 页面背景纹理
+
+后台「页面背景纹理」可选 `none`（默认，纯色）、`dots` 点阵、`grid` 网格、`cross` 十字、`diagonal` 斜线。纹理极淡、无缝密铺，按屏幕物理像素绘制，任意缩放下点线粗细一致，并跟随配色主题的明暗。
 
 ### 配色主题
 
@@ -144,6 +149,7 @@ Settings are declared in `komari-theme.json` under `configuration` (`type: manag
 | Group | Key | Type | Default |
 | --- | --- | --- | --- |
 | Appearance | `colorScheme` | select: yellow-light, red-light, blue-light, green-light, purple-light, tokyonight-dark, dracula-dark, monokai-dark, nord-dark, gruvbox-dark, catppuccin-dark | `yellow-light` |
+| Appearance | `pageBackground` | select: none, dots, grid, cross, diagonal | `none` |
 | Appearance | `cardStyle` | select: thick, thin, double | `thick` |
 | Appearance | `showUptime` | switch | on |
 | Appearance | `showLoginButton` | switch | on |

@@ -487,11 +487,13 @@
         return `<i class="x-seg ${latClass}${lossClass}" title="${escapeHtml(tip)}"></i>`;
       }).join('');
       const latText = c.latency == null ? '--' : `${Math.round(c.latency)}ms`;
+      const latClass = c.latency == null ? 'x-t0' : `x-t${latencyTone(c.latency)}`;
+      const lossClass = c.loss == null ? 'x-t0' : `x-t${lossTone(c.loss)}`;
       return `<div class="x-carrier" data-k="${c.key}">
         <span class="x-carrier-label x-${c.key}" title="${escapeHtml(`${c.title}\n${c.taskNames.join(' / ')}`)}">${c.label}</span>
-        <span class="x-carrier-num">${latText}</span>
+        <span class="x-carrier-num x-lat ${latClass}">${latText}</span>
         <span class="x-track"><span class="x-strip">${segs}</span></span>
-        <span class="x-carrier-num${c.loss > 1 ? ' x-lossy' : ''}">${c.loss == null ? '--' : c.loss.toFixed(1) + '%'}</span>
+        <span class="x-carrier-num x-loss ${lossClass}">${c.loss == null ? '--' : c.loss.toFixed(1) + '%'}</span>
       </div>`;
     }).join('')}</div>`;
   }
@@ -603,22 +605,29 @@
   // Pixel-exact strips. CSS layout works in 1/64 px units, which cannot land every line on a device
   // pixel at fractional zoom (125%, 175%...), so the strip is painted on a canvas in device pixels.
   // The transparent .x-seg spans stay on top for hover tooltips (and are the no-canvas fallback).
-  function exactDevicePixels(available, dpr) {
-    // Largest width whose CSS size is exact in layout units, so the canvas is never resampled.
-    for (let w = Math.floor(available); w > Math.floor(available) - 64 && w > 0; w--) {
-      const units = w / dpr * 64;
-      if (Math.abs(units - Math.round(units)) < 1e-6) return w;
+  // A device-pixel length whose CSS size is exact in layout units (1/64 px), so the canvas is
+  // composited 1:1. `accept` adds extra constraints (e.g. parity for a centred divider).
+  function exactDevicePixels(target, dpr, accept = () => true, direction = -1) {
+    const start = Math.round(target);
+    for (let k = 0; k < 64; k++) {
+      for (const w of direction < 0 ? [start - k] : [start - k, start + k]) {
+        if (w <= 0) continue;
+        const units = w / dpr * 64;
+        if (Math.abs(units - Math.round(units)) < 1e-6 && accept(w)) return w;
+      }
     }
-    return Math.floor(available);
+    return Math.max(1, Math.floor(target));
   }
 
   function snapStrip(track, width) {
     const strip = track.querySelector('.x-strip');
     if (!strip || !(width > 0)) return;
     const dpr = window.devicePixelRatio || 1;
-    const line = Math.max(1, Math.round(2 * dpr));
-    const W = exactDevicePixels(width * dpr, dpr);
-    const H = exactDevicePixels(16 * dpr, dpr);
+    const frameW = Math.max(1, Math.round(2 * dpr));                     // outer frame: 2 CSS px
+    const sepW = Math.max(1, Math.round(1 * dpr));                       // inner lines: 1 CSS px
+    const W = exactDevicePixels(Math.floor(width * dpr), dpr);
+    // Height chosen so a loss slot splits into two equal halves around a centred divider.
+    const H = exactDevicePixels(16 * dpr, dpr, h => (h - 2 * frameW - sepW) % 2 === 0, 0);
     let canvas = track.querySelector('canvas');
     if (!canvas) {
       canvas = document.createElement('canvas');
@@ -628,41 +637,42 @@
     }
     canvas.width = W;
     canvas.height = H;
+    // Centre the strip in its column (whole device pixels), so leftover space is split evenly.
+    const inset = Math.floor((Math.floor(width * dpr) - W) / 2) / dpr;
+    canvas.style.left = strip.style.marginLeft = `${inset}px`;
     canvas.style.width = strip.style.width = `${W / dpr}px`;
     canvas.style.height = strip.style.height = `${H / dpr}px`;
+    track.style.height = `${H / dpr}px`;
 
     const css = getComputedStyle(strip);
     const tone = name => css.getPropertyValue(name).trim();
-    const frame = tone('--black') || '#000';                     // outer frame = ink, like other boxes
-    const ink = tone('--strip-gap') || frame;                      // separators (dark themes: background)
+    const frame = tone('--black') || '#000';
+    const ink = tone('--strip-gap') || frame;
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = frame;
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = ink;
-    ctx.fillRect(line, line, W - 2 * line, H - 2 * line);
+    ctx.fillRect(frameW, frameW, W - 2 * frameW, H - 2 * frameW);
 
     const segs = Array.from(strip.children);
     const n = segs.length || CARRIER_BAR_COUNT;
-    const colour = W - 2 * line - (n - 1) * line;
+    const colour = W - 2 * frameW - (n - 1) * sepW;
     const base = Math.max(1, Math.floor(colour / n));
     const spare = Math.max(0, colour - base * n);
-    const top = line, height = H - 2 * line, band = Math.round(4 * dpr);
-    let x = line;
+    const top = frameW, height = H - 2 * frameW, half = (height - sepW) / 2;
+    let x = frameW;
     segs.forEach((seg, i) => {
       const w = base + Math.floor((i + 1) * spare / n) - Math.floor(i * spare / n);
       const lat = /lat-(\d)/.exec(seg.className), loss = /loss-(\d)/.exec(seg.className);
       if (lat) {
         ctx.fillStyle = tone(`--sig-${lat[1]}`);
-        ctx.fillRect(x, top, w, height);
+        ctx.fillRect(x, top, w, loss ? half : height);
         if (loss) {
           const level = Math.min(5, Math.max(3, Number(loss[1]) + 1));   // loss-2 -> sig-3 ... loss-4/5 -> sig-5
-          ctx.fillStyle = ink;
-          ctx.fillRect(x, top + height - band - line, w, line);
           ctx.fillStyle = tone(`--sig-${level}`);
-          ctx.fillRect(x, top + height - band, w, band);
+          ctx.fillRect(x, top + half + sepW, w, half);                     // divider = the gap colour between
         }
       } else {
-        // Empty slot: background with a 1-device-pixel diagonal hatch.
         ctx.fillStyle = tone('--bg') || '#f5f5f5';
         ctx.fillRect(x, top, w, height);
         ctx.fillStyle = tone('--hatch') || 'rgba(0,0,0,.15)';
@@ -671,7 +681,7 @@
           for (let xx = (step - (yy % step)) % step; xx < w; xx += step) ctx.fillRect(x + xx, top + yy, 1, 1);
         }
       }
-      x += w + line;
+      x += w + sepW;
     });
     strip.classList.add('is-canvas');
     alignCanvas(canvas);
@@ -708,11 +718,41 @@
     document.querySelectorAll('.x-track').forEach(track => snapStrip(track, track.getBoundingClientRect().width));
   }
 
+  // Subtle seamless page patterns, drawn per tile in device pixels so every dot/line is identical.
+  const PAGE_PATTERNS = {
+    dots:     { size: 16, draw: (ctx, T, u) => ctx.fillRect(0, 0, u, u) },
+    grid:     { size: 24, draw: (ctx, T, u) => { ctx.fillRect(0, 0, T, u); ctx.fillRect(0, u, u, T - u); } },
+    cross:    { size: 24, draw: (ctx, T, u) => { const c = Math.floor((T - u) / 2), a = 2 * u; ctx.fillRect(c - a, c, 2 * a + u, u); ctx.fillRect(c, c - a, u, a); ctx.fillRect(c, c + u, u, a); } },
+    diagonal: { size: 12, draw: (ctx, T, u) => { for (let i = 0; i < T; i++) ctx.fillRect(i, T - 1 - i, u, 1); } },
+  };
+
+  function renderPagePattern() {
+    const name = String(getSetting('pageBackground', 'none'));
+    const pattern = PAGE_PATTERNS[name];
+    const root = document.documentElement;
+    if (!pattern) {
+      root.style.removeProperty('--page-pattern');
+      return;
+    }
+    const dpr = window.devicePixelRatio || 1;
+    const u = Math.max(1, Math.round(dpr));
+    const T = exactDevicePixels(pattern.size * dpr, dpr, t => t % u === 0, 0);
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = T;
+    const ctx = canvas.getContext('2d');
+    const dark = (root.dataset.scheme || '').endsWith('-dark');
+    ctx.globalAlpha = dark ? 0.07 : 0.08;
+    ctx.fillStyle = getComputedStyle(root).getPropertyValue('--black').trim() || '#000';
+    pattern.draw(ctx, T, u);
+    root.style.setProperty('--page-pattern', `url(${canvas.toDataURL()})`);
+    root.style.setProperty('--page-pattern-size', `${T / dpr}px ${T / dpr}px`);
+  }
+
   // Moving the window to a screen with another scale factor changes devicePixelRatio, not sizes.
   (function watchPixelRatio() {
     if (!window.matchMedia) return;
     const mq = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
-    const onChange = () => { snapAllStrips(); watchPixelRatio(); };
+    const onChange = () => { snapAllStrips(); renderPagePattern(); watchPixelRatio(); };
     if (mq.addEventListener) mq.addEventListener('change', onChange, { once: true });
   })();
 
@@ -957,6 +997,7 @@
 
     refreshAllExtras();
     renderWorldMap();
+    renderPagePattern();
     requestAnimationFrame(snapAllStrips);
   }
 
