@@ -54,6 +54,7 @@
 
   const COLOR_SCHEMES = [
     'yellow-light', 'red-light', 'blue-light', 'green-light', 'purple-light',
+    'solarized-light', 'github-light', 'gruvbox-light', 'catppuccin-light', 'tokyonight-light',
     'tokyonight-dark', 'dracula-dark', 'monokai-dark', 'nord-dark', 'gruvbox-dark', 'catppuccin-dark'
   ];
   const SCHEME_STORAGE_KEY = 'komari1999.colorScheme';

@@ -5,7 +5,7 @@
     "zh-CN": "Neo-Brutalism 风格 Komari 主题（Fork）：三网延迟与丢包、剩余天数与价值、流量重置日与日均可用流量",
     "en": "Neo-Brutalism dashboard for Komari Monitor (fork) with CT/CU/CM latency & loss, billing and traffic-plan info"
   },
-  "version": "1.3.5",
+  "version": "1.3.6",
   "author": "ricebucket, 10ta",
   "url": "https://github.com/10ta/komari-theme-1999-fork",
   "preview": "static/cover-image.png",
@@ -15,8 +15,8 @@
     "data": [
       { "type": "title", "name": { "zh-CN": "外观", "en": "Appearance" } },
       { "key": "colorScheme", "type": "select", "default": "yellow-light",
-        "options": "yellow-light,red-light,blue-light,green-light,purple-light,tokyonight-dark,dracula-dark,monokai-dark,nord-dark,gruvbox-dark,catppuccin-dark",
-        "name": { "zh-CN": "配色主题", "en": "Color Scheme" }, "help": { "zh-CN": "*-light 为浅色（只换强调色）；*-dark 为深色：Tokyo Night、Dracula、Monokai、Nord、Gruvbox、Catppuccin Mocha", "en": "*-light: light paper with an accent color. *-dark: Tokyo Night, Dracula, Monokai, Nord, Gruvbox, Catppuccin Mocha" } },
+        "options": "yellow-light,red-light,blue-light,green-light,purple-light,solarized-light,github-light,gruvbox-light,catppuccin-light,tokyonight-light,tokyonight-dark,dracula-dark,monokai-dark,nord-dark,gruvbox-dark,catppuccin-dark",
+        "name": { "zh-CN": "配色主题", "en": "Color Scheme" }, "help": { "zh-CN": "浅色：yellow/red/blue/green/purple-light 只换强调色；solarized、github、gruvbox、catppuccin（Latte）、tokyonight（Day）-light 为完整浅色配色。深色：Tokyo Night、Dracula、Monokai、Nord、Gruvbox、Catppuccin Mocha", "en": "*-light: light paper with an accent color. *-dark: Tokyo Night, Dracula, Monokai, Nord, Gruvbox, Catppuccin Mocha" } },
       { "key": "pageBackground", "type": "select", "default": "none", "options": "none,dots,grid,cross,diagonal",
         "name": { "zh-CN": "页面背景纹理", "en": "Page background" }, "help": { "zh-CN": "极淡的无缝密铺纹理，按屏幕物理像素绘制：dots 点阵、grid 网格、cross 十字、diagonal 斜线；none 为纯色", "en": "Faint seamless pattern: dots, grid, cross, diagonal; none = plain" } },
       { "key": "cardStyle", "type": "select", "options": "thick,thin,double", "default": "thick",
