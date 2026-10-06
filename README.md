@@ -58,6 +58,8 @@ Fork of [r1cebucket/komari-theme-1999](https://github.com/r1cebucket/komari-them
 - 卡片和列表的节点名前显示国旗。国旗来自节点的「地区」字段：Komari 的 GeoIP 会自动填入国旗 emoji，也可以在后台手动填写国旗或两位国家代码（如 `HK`）。
 - 页头统计改为两排三列，右侧是像素世界地图：每个有国家信息的节点在对应国家显示国旗，同一国家多台机器会显示数量；离线节点为灰色。
 - 各节点用流动虚线连到「地图连线终点」（默认 `CN`，留空则不画线）；跨越太平洋的连线会从地图边缘绕过去。
+- 地图像地球仪一样自西向东无限滚动，速度由「地图旋转速度（秒/圈）」控制（默认 120，0 为不自动滚动）；鼠标或手指可左右无限拖拽，鼠标悬停时暂停。系统开启「减少动态效果」时不自动滚动。
+- 两排统计等高，网速在一行内显示。
 - 屏幕宽度 ≤768px 时隐藏地图，恢复原来的统计布局。
 - Windows 自带字体不显示国旗，主题内置了 Twemoji 国旗字体，只作用于国旗字符。
 
@@ -142,6 +144,7 @@ Settings are declared in `komari-theme.json` under `configuration` (`type: manag
 | Appearance | `showLoginButton` | switch | on |
 | Appearance | `showWorldMap` | switch | on |
 | Appearance | `mapHub` | string, ISO 3166 alpha-2 code | `CN` |
+| Appearance | `mapSpinSeconds` | number, seconds per turn (0 = off) | `120` |
 | Carrier latency | `carrierPingEnabled` | switch | on |
 | Carrier latency | `carrierPingHours` | number (1-720) | `24` |
 | Carrier latency | `carrierCtTasks` / `carrierCuTasks` / `carrierCmTasks` | Ping task picker | empty (auto by name) |

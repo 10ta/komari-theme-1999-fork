@@ -662,7 +662,7 @@
     return node.region ? `<span class="node-flag" title="${escapeHtml(node.region)}">${escapeHtml(node.region)}</span>` : '';
   }
 
-  const worldMap = { landPath: null, signature: '' };
+  const worldMap = { landPath: null, signature: '', offset: 0, last: 0, dragging: false, hovering: false, bound: false };
 
   function mapPoint(lon, lat) {
     const m = window.KOMARI_WORLDMAP;
@@ -679,7 +679,7 @@
       for (let bit = 5; bit >= 0; bit--, index++) {
         if (!((value >> bit) & 1) || index >= m.cols * m.rows) continue;
         const x = index % m.cols, y = Math.floor(index / m.cols);
-        d += `M${x + 0.12} ${y + 0.12}h0.76v0.76h-0.76z`;
+        d += `M${x + 0.12} ${y + 0.12}h0.76v0.76h-0.76zM${x + m.cols + 0.12} ${y + 0.12}h0.76v0.76h-0.76z`;
       }
     }
     return d;
@@ -711,6 +711,7 @@
     if (!worldMap.landPath) {
       worldMap.landPath = buildLandPath();
       box.querySelector('.map-land').setAttribute('d', worldMap.landPath);
+      startWorldMapMotion();
     }
 
     // Group nodes by country.
@@ -735,17 +736,76 @@
     groups.forEach(group => {
       const point = mapPoint(...m.anchors[group.code]);
       const live = group.online > 0;
-      if (hub && group.code !== hubCode) {
-        linkPaths(point, hub, m.cols).forEach(d => links.push(`<path class="map-link${live ? '' : ' is-offline'}" d="${d}"></path>`));
-      }
       const tip = `${group.code} · ${group.names.join(', ')}${live ? '' : ' (offline)'}`;
-      pins.push(`<span class="map-pin${live ? '' : ' is-offline'}" style="left:${(point[0] / m.cols * 100).toFixed(2)}%;top:${(point[1] / m.rows * 100).toFixed(2)}%" title="${escapeHtml(tip)}">${flagEmoji(group.code)}${group.names.length > 1 ? `<b>${group.names.length}</b>` : ''}</span>`);
+      const label = `${flagEmoji(group.code)}${group.names.length > 1 ? `<b>${group.names.length}</b>` : ''}`;
+      for (const copy of [0, m.cols]) {
+        if (hub && group.code !== hubCode) {
+          linkPaths([point[0] + copy, point[1]], [hub[0] + copy, hub[1]], m.cols)
+            .forEach(d => links.push(`<path class="map-link${live ? '' : ' is-offline'}" d="${d}"></path>`));
+        }
+        pins.push(mapPinHtml(point[0] + copy, point[1], `map-pin${live ? '' : ' is-offline'}`, tip, label));
+      }
     });
     if (hub && !groups.has(hubCode)) {
-      pins.push(`<span class="map-pin map-hub" style="left:${(hub[0] / m.cols * 100).toFixed(2)}%;top:${(hub[1] / m.rows * 100).toFixed(2)}%" title="${escapeHtml(hubCode)} · hub">${flagEmoji(hubCode)}</span>`);
+      for (const copy of [0, m.cols]) pins.push(mapPinHtml(hub[0] + copy, hub[1], 'map-pin map-hub', `${hubCode} · hub`, flagEmoji(hubCode)));
     }
     box.querySelector('.map-links').innerHTML = links.join('');
     box.querySelector('.map-pins').innerHTML = pins.join('');
+  }
+
+  // Pins are positioned on the double-width strip (two copies of the map).
+  function mapPinHtml(x, y, cls, tip, label) {
+    const m = window.KOMARI_WORLDMAP;
+    return `<span class="${cls}" style="left:${(x / (m.cols * 2) * 100).toFixed(3)}%;top:${(y / m.rows * 100).toFixed(2)}%" title="${escapeHtml(tip)}">${label}</span>`;
+  }
+
+  // Globe-style endless scroll: west -> east at `mapSpinSeconds` per revolution (0 = off), plus drag.
+  function setMapOffset(offset) {
+    const m = window.KOMARI_WORLDMAP;
+    const strip = document.querySelector('.map-strip');
+    if (!strip) return;
+    worldMap.offset = ((offset % m.cols) + m.cols) % m.cols;
+    strip.style.transform = `translateX(${(-worldMap.offset / (m.cols * 2) * 100).toFixed(4)}%)`;
+  }
+
+  function startWorldMapMotion() {
+    const box = document.querySelector('.map-box');
+    const m = window.KOMARI_WORLDMAP;
+    if (!box || !m || worldMap.bound) return;
+    worldMap.bound = true;
+    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const tick = now => {
+      const dt = worldMap.last ? Math.min(0.1, (now - worldMap.last) / 1000) : 0;
+      worldMap.last = now;
+      const seconds = Number(getSetting('mapSpinSeconds', 120)) || 0;
+      const map = document.getElementById('stats-map');
+      if (seconds > 0 && !reduceMotion && !worldMap.dragging && !worldMap.hovering && map && map.offsetWidth > 0 && !document.hidden) {
+        // Content moves west -> east, so the visible window slides toward lower longitudes.
+        setMapOffset(worldMap.offset - m.cols / seconds * dt);
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+
+    let startX = 0, startOffset = 0;
+    box.addEventListener('pointerenter', () => { worldMap.hovering = true; });
+    box.addEventListener('pointerleave', () => { worldMap.hovering = false; });
+    box.addEventListener('pointerdown', e => {
+      worldMap.dragging = true;
+      startX = e.clientX;
+      startOffset = worldMap.offset;
+      box.classList.add('is-dragging');
+      box.setPointerCapture(e.pointerId);
+    });
+    box.addEventListener('pointermove', e => {
+      if (!worldMap.dragging) return;
+      const width = box.getBoundingClientRect().width || 1;
+      setMapOffset(startOffset - (e.clientX - startX) / width * m.cols);
+    });
+    const endDrag = () => { worldMap.dragging = false; box.classList.remove('is-dragging'); };
+    box.addEventListener('pointerup', endDrag);
+    box.addEventListener('pointercancel', endDrag);
   }
 
   function applySettings() {

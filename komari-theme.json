@@ -5,7 +5,7 @@
     "zh-CN": "Neo-Brutalism 风格 Komari 主题（Fork）：三网延迟与丢包、剩余天数与价值、流量重置日与日均可用流量",
     "en": "Neo-Brutalism dashboard for Komari Monitor (fork) with CT/CU/CM latency & loss, billing and traffic-plan info"
   },
-  "version": "1.3.0",
+  "version": "1.3.1",
   "author": "ricebucket, 10ta",
   "url": "https://github.com/10ta/komari-theme-1999-fork",
   "preview": "static/cover-image.png",
@@ -28,6 +28,9 @@
         "name": { "zh-CN": "页头显示世界地图", "en": "Show world map in header" }, "help": { "zh-CN": "页头统计改为两排三列，右侧显示像素世界地图与节点国旗（宽度 ≤768px 时隐藏）", "en": "Stats become 2 x 3 with a pixel world map of node flags on the right (hidden at ≤768px)" } },
       { "key": "mapHub", "type": "string", "default": "CN",
         "name": { "zh-CN": "地图连线终点（国家代码）", "en": "Map link hub (country code)" }, "help": { "zh-CN": "各节点国旗用动画虚线连到这个国家，填 ISO 两位代码如 CN、HK；留空则不画连线", "en": "Two-letter ISO code each node links to, e.g. CN; empty = no links" } },
+
+      { "key": "mapSpinSeconds", "type": "number", "default": 120,
+        "name": { "zh-CN": "地图旋转速度（秒/圈）", "en": "Map spin (seconds per turn)" }, "help": { "zh-CN": "地图像地球仪一样自西向东无限滚动，转一圈所需秒数；数值越小越快，0 为不自动滚动。鼠标可左右拖拽，悬停时暂停", "en": "Seconds per full west-to-east turn; 0 disables auto spin. Drag to scroll; hover pauses" } },
 
       { "type": "title", "name": { "zh-CN": "三网延迟与丢包", "en": "CT / CU / CM Latency" } },
       { "key": "carrierPingEnabled", "type": "switch", "default": true,

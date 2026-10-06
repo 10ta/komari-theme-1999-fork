@@ -2450,7 +2450,19 @@ h1, h2, h3, h4, h5, h6 {
   .header.has-map .stats-bar {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.6fr);
+    grid-template-rows: 1fr 1fr;
     overflow: visible;
+  }
+
+  /* One line per value so both stat rows keep the same height. */
+  .header.has-map #stat-net-in,
+  .header.has-map #stat-net-out {
+    white-space: nowrap;
+  }
+
+  .header.has-map .stat-value {
+    font-size: clamp(1.05rem, 1.5vw, 1.5rem);
+    white-space: nowrap;
   }
 
   .header.has-map .stat-item {
@@ -2490,6 +2502,24 @@ h1, h2, h3, h4, h5, h6 {
   position: relative;
   width: min(100cqw, calc(100cqh * 96 / 38));
   aspect-ratio: 96 / 38;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.map-box.is-dragging {
+  cursor: grabbing;
+}
+
+/* Two copies of the world side by side; translating by up to one copy loops seamlessly. */
+.map-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200%;
+  height: 100%;
+  will-change: transform;
 }
 
 .map-svg {
