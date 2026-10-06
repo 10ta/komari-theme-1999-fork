@@ -490,7 +490,7 @@
       return `<div class="x-carrier" data-k="${c.key}">
         <span class="x-carrier-label x-${c.key}" title="${escapeHtml(`${c.title}\n${c.taskNames.join(' / ')}`)}">${c.label}</span>
         <span class="x-carrier-num">${latText}</span>
-        <span class="x-strip">${segs}</span>
+        <span class="x-track"><span class="x-strip">${segs}</span></span>
         <span class="x-carrier-num${c.loss > 1 ? ' x-lossy' : ''}">${c.loss == null ? '--' : c.loss.toFixed(1) + '%'}</span>
       </div>`;
     }).join('')}</div>`;
@@ -600,13 +600,131 @@
     return kv + buildCarrierHtml(node.uuid);
   }
 
+  // Pixel-exact strips. CSS layout works in 1/64 px units, which cannot land every line on a device
+  // pixel at fractional zoom (125%, 175%...), so the strip is painted on a canvas in device pixels.
+  // The transparent .x-seg spans stay on top for hover tooltips (and are the no-canvas fallback).
+  function exactDevicePixels(available, dpr) {
+    // Largest width whose CSS size is exact in layout units, so the canvas is never resampled.
+    for (let w = Math.floor(available); w > Math.floor(available) - 64 && w > 0; w--) {
+      const units = w / dpr * 64;
+      if (Math.abs(units - Math.round(units)) < 1e-6) return w;
+    }
+    return Math.floor(available);
+  }
+
+  function snapStrip(track, width) {
+    const strip = track.querySelector('.x-strip');
+    if (!strip || !(width > 0)) return;
+    const dpr = window.devicePixelRatio || 1;
+    const line = Math.max(1, Math.round(2 * dpr));
+    const W = exactDevicePixels(width * dpr, dpr);
+    const H = exactDevicePixels(16 * dpr, dpr);
+    let canvas = track.querySelector('canvas');
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvas.className = 'x-strip-canvas';
+      canvas.setAttribute('aria-hidden', 'true');
+      track.insertBefore(canvas, strip);
+    }
+    canvas.width = W;
+    canvas.height = H;
+    canvas.style.width = strip.style.width = `${W / dpr}px`;
+    canvas.style.height = strip.style.height = `${H / dpr}px`;
+
+    const css = getComputedStyle(strip);
+    const tone = name => css.getPropertyValue(name).trim();
+    const frame = tone('--black') || '#000';                     // outer frame = ink, like other boxes
+    const ink = tone('--strip-gap') || frame;                      // separators (dark themes: background)
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = frame;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = ink;
+    ctx.fillRect(line, line, W - 2 * line, H - 2 * line);
+
+    const segs = Array.from(strip.children);
+    const n = segs.length || CARRIER_BAR_COUNT;
+    const colour = W - 2 * line - (n - 1) * line;
+    const base = Math.max(1, Math.floor(colour / n));
+    const spare = Math.max(0, colour - base * n);
+    const top = line, height = H - 2 * line, band = Math.round(4 * dpr);
+    let x = line;
+    segs.forEach((seg, i) => {
+      const w = base + Math.floor((i + 1) * spare / n) - Math.floor(i * spare / n);
+      const lat = /lat-(\d)/.exec(seg.className), loss = /loss-(\d)/.exec(seg.className);
+      if (lat) {
+        ctx.fillStyle = tone(`--sig-${lat[1]}`);
+        ctx.fillRect(x, top, w, height);
+        if (loss) {
+          const level = Math.min(5, Math.max(3, Number(loss[1]) + 1));   // loss-2 -> sig-3 ... loss-4/5 -> sig-5
+          ctx.fillStyle = ink;
+          ctx.fillRect(x, top + height - band - line, w, line);
+          ctx.fillStyle = tone(`--sig-${level}`);
+          ctx.fillRect(x, top + height - band, w, band);
+        }
+      } else {
+        // Empty slot: background with a 1-device-pixel diagonal hatch.
+        ctx.fillStyle = tone('--bg') || '#f5f5f5';
+        ctx.fillRect(x, top, w, height);
+        ctx.fillStyle = tone('--hatch') || 'rgba(0,0,0,.15)';
+        const step = Math.max(3, Math.round(3 * dpr));
+        for (let yy = 0; yy < height; yy++) {
+          for (let xx = (step - (yy % step)) % step; xx < w; xx += step) ctx.fillRect(x + xx, top + yy, 1, 1);
+        }
+      }
+      x += w + line;
+    });
+    strip.classList.add('is-canvas');
+    alignCanvas(canvas);
+  }
+
+  // A canvas whose top-left is not on a whole device pixel gets resampled (blurred) when composited;
+  // shift it by the fractional remainder. Positions move on scroll/resize, so this is re-run then.
+  function alignCanvas(canvas) {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const left = (rect.left - (canvas._ox || 0)) * dpr, top = (rect.top - (canvas._oy || 0)) * dpr;
+    canvas._ox = (Math.round(left) - left) / dpr;
+    canvas._oy = (Math.round(top) - top) / dpr;
+    canvas.style.transform = `translate(${canvas._ox}px, ${canvas._oy}px)`;
+  }
+
+  let alignQueued = false;
+  function alignAllCanvases() {
+    if (alignQueued) return;
+    alignQueued = true;
+    requestAnimationFrame(() => {
+      alignQueued = false;
+      document.querySelectorAll('.x-strip-canvas').forEach(alignCanvas);
+    });
+  }
+  window.addEventListener('scroll', alignAllCanvases, { passive: true });
+  window.addEventListener('resize', alignAllCanvases);
+
+  const stripObserver = 'ResizeObserver' in window
+    ? new ResizeObserver(entries => entries.forEach(e => snapStrip(e.target, e.contentRect.width)))
+    : null;
+
+  function snapAllStrips() {
+    document.querySelectorAll('.x-track').forEach(track => snapStrip(track, track.getBoundingClientRect().width));
+  }
+
+  // Moving the window to a screen with another scale factor changes devicePixelRatio, not sizes.
+  (function watchPixelRatio() {
+    if (!window.matchMedia) return;
+    const mq = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+    const onChange = () => { snapAllStrips(); watchPixelRatio(); };
+    if (mq.addEventListener) mq.addEventListener('change', onChange, { once: true });
+  })();
+
   function renderExtras(root, node) {
     const box = root && root.querySelector('.node-extras');
     if (!box) return;
     const html = buildExtrasHtml(node);
     if (box.dataset.html === html) return;
     box.dataset.html = html;
+    if (stripObserver) box.querySelectorAll('.x-track').forEach(track => stripObserver.unobserve(track));
     box.innerHTML = html;
+    if (stripObserver) box.querySelectorAll('.x-track').forEach(track => stripObserver.observe(track));
     box.hidden = !html;
   }
 
@@ -839,6 +957,7 @@
 
     refreshAllExtras();
     renderWorldMap();
+    requestAnimationFrame(snapAllStrips);
   }
 
   async function rpcCall(method, params) {
@@ -1086,6 +1205,7 @@
       }
       updateStats();
       renderWorldMap();
+      alignAllCanvases();
 
       if (state.activeNodeUuid) {
         updateModalLiveInfo();

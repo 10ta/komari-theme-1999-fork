@@ -2351,18 +2351,50 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--accent-red);
 }
 
+.x-track {
+  display: block;
+  position: relative;
+  min-width: 0;
+}
+
+.x-strip-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  pointer-events: none;
+  /* With the whole-pixel offset from alignCanvas this maps canvas pixels 1:1 to screen pixels. */
+  image-rendering: pixelated;
+}
+
+/* Painted by the canvas underneath; the spans only provide hover tooltips. */
+.x-strip.is-canvas,
+.x-strip.is-canvas .x-seg {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Fallback rendering; with JS the strip is painted pixel-exact on a canvas (snapStrip). */
 .x-strip {
-  display: grid;
-  grid-template-columns: repeat(20, minmax(0, 1fr));
-  gap: 1px;
-  height: 14px;
+  display: flex;
+  height: 16px;
   border: 2px solid var(--black);
   background: var(--strip-gap, var(--black));
 }
 
+/* Separators are borders, not layout gaps: browsers snap border widths to whole device pixels,
+   so every line renders equally thick at any zoom. 2px matches the frame and the other boxes. */
 .x-seg {
   display: block;
+  flex: 1 1 0;
+  min-width: 0;
   background: var(--bg);
+  border-left: 2px solid var(--strip-gap, var(--black));
+}
+
+.x-seg:first-child {
+  border-left: 0;
 }
 
 .x-seg-empty {
@@ -2375,11 +2407,11 @@ h1, h2, h3, h4, h5, h6 {
 .x-seg.lat-4 { background: var(--sig-4); }
 .x-seg.lat-5 { background: var(--sig-5); }
 
-/* Loss marker: a bottom band, separated from the latency color by a 1px black line. */
-.x-seg.loss-2 { box-shadow: inset 0 -4px 0 var(--sig-3), inset 0 -5px 0 var(--strip-gap, var(--black)); }
-.x-seg.loss-3 { box-shadow: inset 0 -4px 0 var(--sig-4), inset 0 -5px 0 var(--strip-gap, var(--black)); }
+/* Loss marker: a 4px bottom band under a 2px divider (same weight as every other line). */
+.x-seg.loss-2 { box-shadow: inset 0 -4px 0 var(--sig-3), inset 0 -6px 0 var(--strip-gap, var(--black)); }
+.x-seg.loss-3 { box-shadow: inset 0 -4px 0 var(--sig-4), inset 0 -6px 0 var(--strip-gap, var(--black)); }
 .x-seg.loss-4,
-.x-seg.loss-5 { box-shadow: inset 0 -4px 0 var(--sig-5), inset 0 -5px 0 var(--strip-gap, var(--black)); }
+.x-seg.loss-5 { box-shadow: inset 0 -4px 0 var(--sig-5), inset 0 -6px 0 var(--strip-gap, var(--black)); }
 
 /* List view: extras form two aligned lines on the row's own columns (subgrid).
    Line 1: EXPIRES | VALUE | RESET | PER DAY under CPU | RAM | DISK | NET.
