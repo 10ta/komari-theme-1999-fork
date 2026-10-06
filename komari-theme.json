@@ -5,7 +5,7 @@
     "zh-CN": "Neo-Brutalism 风格 Komari 主题（Fork）：三网延迟与丢包、剩余天数与价值、流量重置日与日均可用流量",
     "en": "Neo-Brutalism dashboard for Komari Monitor (fork) with CT/CU/CM latency & loss, billing and traffic-plan info"
   },
-  "version": "1.3.1",
+  "version": "1.3.2",
   "author": "ricebucket, 10ta",
   "url": "https://github.com/10ta/komari-theme-1999-fork",
   "preview": "static/cover-image.png",

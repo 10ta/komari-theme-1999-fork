@@ -441,7 +441,9 @@ h1, h2, h3, h4, h5, h6 {
 .node-name {
   font-family: 'Twemoji Country Flags', 'Archivo Black', sans-serif;
   font-size: 1.1rem;
-  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .node-status {
@@ -2609,4 +2611,51 @@ h1, h2, h3, h4, h5, h6 {
   margin-right: 0.35em;
   font-family: 'Twemoji Country Flags', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
   font-weight: 400;
+}
+
+/* === Fork: keep every card's rows aligned ===
+   Fixed line count per element; overflow is truncated (full text in the tooltip). */
+.node-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.node-header > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.node-info-line {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.metric-header {
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.metric-header > span:first-child {
+  flex-shrink: 0;
+}
+
+.metric-header .metric-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Footer sits at the bottom of the card, so footers line up across a row. */
+.node-spacer {
+  flex: 1 0 1.5rem;
+}
+
+.node-card > .node-footer {
+  margin-top: 0;
+}
+
+.x-cell.x-empty .x-value {
+  color: var(--text-muted);
 }

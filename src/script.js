@@ -474,9 +474,10 @@
   }
 
   function buildCarrierHtml(uuid) {
-    if (!settingOn('carrierPingEnabled')) return '';
-    const carriers = state.carrier.byNode.get(uuid);
-    if (!carriers || !carriers.length) return '';
+    if (!settingOn('carrierPingEnabled') || state.carrier.byNode.size === 0) return '';
+    const found = state.carrier.byNode.get(uuid) || [];
+    const carriers = CARRIERS.map(c => found.find(f => f.key === c.key) ||
+      { ...c, taskNames: ['No Ping task for this node'], latency: null, loss: null, slots: Array(CARRIER_BAR_COUNT).fill(null) });
     return `<div class="x-carriers">${carriers.map(c => {
       const segs = c.slots.map(s => {
         if (!s) return '<i class="x-seg x-seg-empty" title="No samples"></i>';
@@ -490,7 +491,7 @@
         <span class="x-carrier-label x-${c.key}" title="${escapeHtml(`${c.title}\n${c.taskNames.join(' / ')}`)}">${c.label}</span>
         <span class="x-carrier-num">${latText}</span>
         <span class="x-strip">${segs}</span>
-        <span class="x-carrier-num${c.loss > 1 ? ' x-lossy' : ''}">${c.loss.toFixed(1)}%</span>
+        <span class="x-carrier-num${c.loss > 1 ? ' x-lossy' : ''}">${c.loss == null ? '--' : c.loss.toFixed(1) + '%'}</span>
       </div>`;
     }).join('')}</div>`;
   }
@@ -566,6 +567,7 @@
   }
 
   function buildExtrasHtml(node) {
+    // Every card gets the same slots; missing data shows a placeholder so cards stay aligned.
     const cells = [];
     if (settingOn('showBilling')) {
       const b = getBillingInfo(node);
@@ -573,10 +575,14 @@
         const value = b.status === 'expired' ? 'EXPIRED' : b.status === 'long' ? '∞' : `${b.days}D`;
         const cls = b.status === 'expired' || b.status === 'crit' ? 'x-crit' : b.status === 'warn' ? 'x-warn' : '';
         cells.push(xCell('expires', 'EXPIRES', value, cls, b.status === 'long' ? 'Long-term' : new Date(b.expiry).toLocaleDateString()));
-        if (canShowPrice() && (b.value != null || b.free)) {
-          cells.push(xCell('value', 'VALUE', b.free ? 'FREE' : formatMoney(b.value, node.currency), '',
-            b.free ? '' : `${formatMoney(b.price, node.currency)} / ${b.cycle > 0 ? b.cycle + 'D' : 'once'}`));
-        }
+      } else {
+        cells.push(xCell('expires', 'EXPIRES', '—', 'x-empty', 'No expiry date set'));
+      }
+      if (b && canShowPrice() && (b.value != null || b.free)) {
+        cells.push(xCell('value', 'VALUE', b.free ? 'FREE' : formatMoney(b.value, node.currency), '',
+          b.free ? '' : `${formatMoney(b.price, node.currency)} / ${b.cycle > 0 ? b.cycle + 'D' : 'once'}`));
+      } else {
+        cells.push(xCell('value', 'VALUE', '—', 'x-empty', canShowPrice() ? 'No price set' : 'Hidden'));
       }
     }
     if (settingOn('showTrafficPlan')) {
@@ -586,6 +592,8 @@
       if (t.perDay != null) {
         cells.push(xCell('perday', 'PER DAY', formatBytes(Math.floor(t.perDay)), t.remaining === 0 ? 'x-crit' : '',
           `${formatBytes(t.remaining)} left of ${formatBytes(t.limit)} for ${t.daysLeft} day(s)`));
+      } else {
+        cells.push(xCell('perday', 'PER DAY', '∞', '', 'No traffic limit'));
       }
     }
     const kv = cells.length ? `<div class="x-kv">${cells.join('')}</div>` : '';
@@ -1118,8 +1126,11 @@
     card.innerHTML = `
       <div class="node-header">
         <div>
-          <div class="node-name">${flagHtml(node)}${escapeHtml(node.name || 'Unknown')}</div>
-          <div class="node-info">${node.os || ''} · ${node.cpu_name || ''}</div>
+          <div class="node-name" title="${escapeHtml(node.name || 'Unknown')}">${flagHtml(node)}${escapeHtml(node.name || 'Unknown')}</div>
+          <div class="node-info">
+            <span class="node-info-line" title="${escapeHtml(node.os || '')}">${escapeHtml(node.os || '—')}</span>
+            <span class="node-info-line" title="${escapeHtml(node.cpu_name || '')}">${escapeHtml(node.cpu_name || '—')}</span>
+          </div>
         </div>
         <div class="node-status${isOnline ? '' : ' offline'}"></div>
       </div>
@@ -1172,6 +1183,7 @@
         </div>
       </div>
       <div class="node-extras" hidden></div>
+      <div class="node-spacer"></div>
       <div class="node-footer">
         <div class="footer-stat">
           <span data-prev="${upSpeedText}">${upSpeedText}</span>
