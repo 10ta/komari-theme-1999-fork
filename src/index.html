@@ -5,11 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Komari Monitor</title>
   <meta name="description" content="A simple server monitor tool.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <script src="vendor/echarts.min.js"></script>
   </head>
 <body>
   <header class="header">
@@ -66,6 +63,17 @@
       <div class="stat-item">
         <span class="stat-value" id="stat-net-out">0 B/s</span>
         <span class="stat-label">↑ UP</span>
+      </div>
+      <div class="stats-map" id="stats-map" hidden>
+        <div class="map-frame">
+          <div class="map-box">
+            <svg class="map-svg" viewBox="0 0 96 38" preserveAspectRatio="none" aria-hidden="true">
+              <path class="map-land" d=""></path>
+              <g class="map-links"></g>
+            </svg>
+            <div class="map-pins"></div>
+          </div>
+        </div>
       </div>
     </div>
   </header>
@@ -168,6 +176,7 @@
     </div>
   </footer>
 
+  <script src="worldmap.js"></script>
   <script src="script.js"></script>
   </body>
 </html>

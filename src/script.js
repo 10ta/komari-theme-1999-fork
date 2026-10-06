@@ -486,7 +486,7 @@
         return `<i class="x-seg ${latClass}${lossClass}" title="${escapeHtml(tip)}"></i>`;
       }).join('');
       const latText = c.latency == null ? '--' : `${Math.round(c.latency)}ms`;
-      return `<div class="x-carrier">
+      return `<div class="x-carrier" data-k="${c.key}">
         <span class="x-carrier-label x-${c.key}" title="${escapeHtml(`${c.title}\n${c.taskNames.join(' / ')}`)}">${c.label}</span>
         <span class="x-carrier-num">${latText}</span>
         <span class="x-strip">${segs}</span>
@@ -561,8 +561,8 @@
     return `UTC${h >= 0 ? '+' : ''}${h}`;
   }
 
-  function xCell(label, value, cls = '', title = '') {
-    return `<div class="x-cell${cls ? ' ' + cls : ''}"${title ? ` title="${escapeHtml(title)}"` : ''}><span class="x-label">${escapeHtml(label)}</span><span class="x-value">${escapeHtml(value)}</span></div>`;
+  function xCell(key, label, value, cls = '', title = '') {
+    return `<div class="x-cell${cls ? ' ' + cls : ''}" data-k="${key}"${title ? ` title="${escapeHtml(title)}"` : ''}><span class="x-label">${escapeHtml(label)}</span><span class="x-value">${escapeHtml(value)}</span></div>`;
   }
 
   function buildExtrasHtml(node) {
@@ -572,19 +572,19 @@
       if (b) {
         const value = b.status === 'expired' ? 'EXPIRED' : b.status === 'long' ? '∞' : `${b.days}D`;
         const cls = b.status === 'expired' || b.status === 'crit' ? 'x-crit' : b.status === 'warn' ? 'x-warn' : '';
-        cells.push(xCell('EXPIRES', value, cls, b.status === 'long' ? 'Long-term' : new Date(b.expiry).toLocaleDateString()));
+        cells.push(xCell('expires', 'EXPIRES', value, cls, b.status === 'long' ? 'Long-term' : new Date(b.expiry).toLocaleDateString()));
         if (canShowPrice() && (b.value != null || b.free)) {
-          cells.push(xCell('VALUE', b.free ? 'FREE' : formatMoney(b.value, node.currency), '',
+          cells.push(xCell('value', 'VALUE', b.free ? 'FREE' : formatMoney(b.value, node.currency), '',
             b.free ? '' : `${formatMoney(b.price, node.currency)} / ${b.cycle > 0 ? b.cycle + 'D' : 'once'}`));
         }
       }
     }
     if (settingOn('showTrafficPlan')) {
       const t = getTrafficPlan(node);
-      cells.push(xCell(`RESET ${ordinal(t.day)}`, `${t.daysLeft}D`, '',
+      cells.push(xCell('reset', `RESET ${ordinal(t.day)}`, `${t.daysLeft}D`, '',
         `Next reset ${new Date(t.next).toLocaleString()} (VPS ${formatOffset(t.offsetH)})${t.custom ? '' : ' · default'}`));
       if (t.perDay != null) {
-        cells.push(xCell('PER DAY', formatBytes(Math.floor(t.perDay)), t.remaining === 0 ? 'x-crit' : '',
+        cells.push(xCell('perday', 'PER DAY', formatBytes(Math.floor(t.perDay)), t.remaining === 0 ? 'x-crit' : '',
           `${formatBytes(t.remaining)} left of ${formatBytes(t.limit)} for ${t.daysLeft} day(s)`));
       }
     }
@@ -641,6 +641,113 @@
         </div>`;
   }
 
+  // ===== Fork: country flags + pixel world map =====
+  // Komari stores the region as a flag emoji built from an ISO 3166 code (utils/geoip); admins may also type a code.
+  function regionCode(region) {
+    const text = String(region || '').trim();
+    const points = Array.from(text).map(ch => ch.codePointAt(0));
+    if (points.length >= 2 && points.slice(0, 2).every(cp => cp >= 0x1F1E6 && cp <= 0x1F1FF)) {
+      return String.fromCharCode(points[0] - 0x1F1E6 + 65, points[1] - 0x1F1E6 + 65);
+    }
+    return /^[A-Za-z]{2}$/.test(text) ? text.toUpperCase() : '';
+  }
+
+  function flagEmoji(code) {
+    return code ? String.fromCodePoint(...[...code].map(ch => 0x1F1E6 + ch.charCodeAt(0) - 65)) : '';
+  }
+
+  function flagHtml(node) {
+    const code = regionCode(node.region);
+    if (code) return `<span class="node-flag" title="${code}">${flagEmoji(code)}</span>`;
+    return node.region ? `<span class="node-flag" title="${escapeHtml(node.region)}">${escapeHtml(node.region)}</span>` : '';
+  }
+
+  const worldMap = { landPath: null, signature: '' };
+
+  function mapPoint(lon, lat) {
+    const m = window.KOMARI_WORLDMAP;
+    return [(lon - m.lon0) / m.cell, Math.min(m.rows, Math.max(0, (m.lat0 - lat) / m.cell))];
+  }
+
+  function buildLandPath() {
+    const m = window.KOMARI_WORLDMAP;
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    let d = '';
+    let index = 0;
+    for (const ch of m.mask) {
+      const value = alphabet.indexOf(ch);
+      for (let bit = 5; bit >= 0; bit--, index++) {
+        if (!((value >> bit) & 1) || index >= m.cols * m.rows) continue;
+        const x = index % m.cols, y = Math.floor(index / m.cols);
+        d += `M${x + 0.12} ${y + 0.12}h0.76v0.76h-0.76z`;
+      }
+    }
+    return d;
+  }
+
+  // Curved link from a node to the hub; drawn twice (shifted by the map width) when the shorter way
+  // crosses the date line, so e.g. US -> CN leaves the right edge and re-enters on the left.
+  function linkPaths(from, to, cols) {
+    let [x1, y1] = from, [x2, y2] = to;
+    const shift = Math.abs(x2 - x1) > cols / 2 ? (x2 > x1 ? -cols : cols) : 0;
+    const curve = (ax, ay, bx, by) => {
+      const lift = Math.min(6, Math.hypot(bx - ax, by - ay) * 0.22);
+      return `M${ax.toFixed(2)} ${ay.toFixed(2)}Q${((ax + bx) / 2).toFixed(2)} ${(Math.min(ay, by) - lift).toFixed(2)} ${bx.toFixed(2)} ${by.toFixed(2)}`;
+    };
+    if (!shift) return [curve(x1, y1, x2, y2)];
+    return [curve(x1, y1, x2 + shift, y2), curve(x1 - shift, y1, x2, y2)];
+  }
+
+  function renderWorldMap() {
+    const box = document.getElementById('stats-map');
+    const header = document.querySelector('.header');
+    const m = window.KOMARI_WORLDMAP;
+    const enabled = Boolean(box && m) && settingOn('showWorldMap');
+    if (!box) return;
+    box.hidden = !enabled;
+    if (header) header.classList.toggle('has-map', enabled);
+    if (!enabled) return;
+
+    if (!worldMap.landPath) {
+      worldMap.landPath = buildLandPath();
+      box.querySelector('.map-land').setAttribute('d', worldMap.landPath);
+    }
+
+    // Group nodes by country.
+    const groups = new Map();
+    state.nodes.forEach(node => {
+      const code = regionCode(node.region);
+      if (!code || !m.anchors[code]) return;
+      if (!groups.has(code)) groups.set(code, { code, names: [], online: 0 });
+      const group = groups.get(code);
+      group.names.push(node.name || 'Unknown');
+      if (node.online !== false) group.online += 1;
+    });
+
+    const hubCode = String(getSetting('mapHub', 'CN')).trim().toUpperCase();
+    const hub = m.anchors[hubCode] ? mapPoint(...m.anchors[hubCode]) : null;
+    const signature = JSON.stringify([hubCode, Array.from(groups.values())]);
+    if (signature === worldMap.signature) return;
+    worldMap.signature = signature;
+
+    const links = [];
+    const pins = [];
+    groups.forEach(group => {
+      const point = mapPoint(...m.anchors[group.code]);
+      const live = group.online > 0;
+      if (hub && group.code !== hubCode) {
+        linkPaths(point, hub, m.cols).forEach(d => links.push(`<path class="map-link${live ? '' : ' is-offline'}" d="${d}"></path>`));
+      }
+      const tip = `${group.code} · ${group.names.join(', ')}${live ? '' : ' (offline)'}`;
+      pins.push(`<span class="map-pin${live ? '' : ' is-offline'}" style="left:${(point[0] / m.cols * 100).toFixed(2)}%;top:${(point[1] / m.rows * 100).toFixed(2)}%" title="${escapeHtml(tip)}">${flagEmoji(group.code)}${group.names.length > 1 ? `<b>${group.names.length}</b>` : ''}</span>`);
+    });
+    if (hub && !groups.has(hubCode)) {
+      pins.push(`<span class="map-pin map-hub" style="left:${(hub[0] / m.cols * 100).toFixed(2)}%;top:${(hub[1] / m.rows * 100).toFixed(2)}%" title="${escapeHtml(hubCode)} · hub">${flagEmoji(hubCode)}</span>`);
+    }
+    box.querySelector('.map-links').innerHTML = links.join('');
+    box.querySelector('.map-pins').innerHTML = pins.join('');
+  }
+
   function applySettings() {
     const legacyAccent = state.settings.accentColor ? `${state.settings.accentColor}-light` : null;
     const requested = state.settings.colorScheme || legacyAccent;
@@ -663,6 +770,7 @@
     });
 
     refreshAllExtras();
+    renderWorldMap();
   }
 
   async function rpcCall(method, params) {
@@ -909,6 +1017,7 @@
         updateAllCards();
       }
       updateStats();
+      renderWorldMap();
 
       if (state.activeNodeUuid) {
         updateModalLiveInfo();
@@ -949,7 +1058,7 @@
     card.innerHTML = `
       <div class="node-header">
         <div>
-          <div class="node-name">${node.name || 'Unknown'}</div>
+          <div class="node-name">${flagHtml(node)}${escapeHtml(node.name || 'Unknown')}</div>
           <div class="node-info">${node.os || ''} · ${node.cpu_name || ''}</div>
         </div>
         <div class="node-status${isOnline ? '' : ' offline'}"></div>
@@ -1166,7 +1275,7 @@
       <div class="row-head">
         <div class="row-status${isOnline ? '' : ' offline'}"></div>
         <div class="row-name">
-          <div class="row-node-name">${escapeHtml(node.name || 'Unknown')}</div>
+          <div class="row-node-name">${flagHtml(node)}${escapeHtml(node.name || 'Unknown')}</div>
           <div class="row-node-info">${escapeHtml(node.os || '')}${node.cpu_name ? ' · ' + escapeHtml(node.cpu_name) : ''}</div>
         </div>
         <div class="row-uptime">
@@ -2165,13 +2274,13 @@
 
       window.addEventListener('scroll', handleScroll, { passive: true });
 
-      // Set main padding to header height after render
-      requestAnimationFrame(() => {
-        const mainEl = document.querySelector('.main');
-        if (mainEl) {
-          mainEl.style.paddingTop = (header.offsetHeight + 24) + 'px';
-        }
-      });
+      // Keep main content clear of the fixed header whenever its height changes (map on/off, resize, wrap).
+      const mainEl = document.querySelector('.main');
+      if (mainEl) {
+        const syncPadding = () => { mainEl.style.paddingTop = (header.offsetHeight + 24) + 'px'; };
+        syncPadding();
+        if ('ResizeObserver' in window) new ResizeObserver(syncPadding).observe(header);
+      }
     }
 
     fetchPublicSettings().then(async () => {

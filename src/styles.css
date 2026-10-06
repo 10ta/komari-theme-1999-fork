@@ -1,3 +1,35 @@
+/* Bundled fonts (see vendor/LICENSES.md). No requests leave the Komari host. */
+@font-face {
+  font-family: 'Twemoji Country Flags';
+  src: url('vendor/fonts/TwemojiCountryFlags.woff2') format('woff2');
+  unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E0063, U+E0065, U+E0067, U+E006C, U+E006E, U+E0073-E0074, U+E0077, U+E007F;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Archivo Black';
+  src: url('vendor/fonts/archivo-black-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  src: url('vendor/fonts/space-grotesk-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  src: url('vendor/fonts/space-grotesk-latin-500-normal.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  src: url('vendor/fonts/space-grotesk-latin-700-normal.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
   --black: #000000;
   --white: #ffffff;
@@ -16,6 +48,7 @@
   --accent: var(--accent-yellow);
   --border-width: 4px;
   --shadow-offset: 6px;
+  --space-step: 0.75rem;
 }
 
 /* === Colour schemes ===
@@ -177,7 +210,7 @@
 }
 
 body {
-  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Twemoji Country Flags', 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
   background-color: var(--bg);
   color: var(--text);
   min-height: 100vh;
@@ -186,7 +219,7 @@ body {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Archivo Black', sans-serif;
+  font-family: 'Twemoji Country Flags', 'Archivo Black', sans-serif;
   text-transform: uppercase;
   letter-spacing: -0.02em;
 }
@@ -279,7 +312,7 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--white);
   border: 3px solid var(--black);
   text-decoration: none;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Twemoji Country Flags', 'Space Grotesk', sans-serif;
   font-weight: 700;
   font-size: 0.8rem;
   text-transform: uppercase;
@@ -330,7 +363,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .stat-value {
-  font-family: 'Archivo Black', sans-serif;
+  font-family: 'Twemoji Country Flags', 'Archivo Black', sans-serif;
   font-size: 1.5rem;
   display: block;
   color: var(--black);
@@ -406,7 +439,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .node-name {
-  font-family: 'Archivo Black', sans-serif;
+  font-family: 'Twemoji Country Flags', 'Archivo Black', sans-serif;
   font-size: 1.1rem;
   word-break: break-word;
 }
@@ -460,7 +493,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .metric-value {
-  font-family: 'SF Mono', 'Consolas', 'Monaco', 'Space Mono', monospace;
+  font-family: 'Twemoji Country Flags', 'SF Mono', 'Consolas', 'Monaco', 'Space Mono', monospace;
   font-variant-numeric: tabular-nums;
   font-size: 0.85rem;
   display: inline-block;
@@ -520,7 +553,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .net-total-item {
   color: var(--text-muted);
-  font-family: 'Space Grotesk', 'SF Mono', 'Consolas', 'Monaco', monospace;
+  font-family: 'Twemoji Country Flags', 'Space Grotesk', 'SF Mono', 'Consolas', 'Monaco', monospace;
   font-variant-numeric: tabular-nums;
 }
 
@@ -597,7 +630,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .footer-stat span {
   display: block;
-  font-family: 'Space Grotesk', 'SF Mono', 'Consolas', 'Monaco', monospace;
+  font-family: 'Twemoji Country Flags', 'Space Grotesk', 'SF Mono', 'Consolas', 'Monaco', monospace;
   font-variant-numeric: tabular-nums;
   font-size: 0.75rem;
   font-weight: 700;
@@ -718,7 +751,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .footer-signature-build {
-  font-family: 'SF Mono', 'Consolas', monospace;
+  font-family: 'Twemoji Country Flags', 'SF Mono', 'Consolas', monospace;
   font-variant-numeric: tabular-nums;
 }
 
@@ -734,7 +767,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .footer-signature-author {
   color: var(--black);
-  font-family: 'Archivo Black', sans-serif;
+  font-family: 'Twemoji Country Flags', 'Archivo Black', sans-serif;
   font-size: 0.7rem;
   letter-spacing: 0.02em;
 }
@@ -839,7 +872,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .row-node-name {
-  font-family: 'Archivo Black', sans-serif;
+  font-family: 'Twemoji Country Flags', 'Archivo Black', sans-serif;
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: -0.01em;
@@ -924,7 +957,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .row-metric-value {
-  font-family: 'SF Mono', 'Consolas', 'Monaco', 'Space Mono', monospace;
+  font-family: 'Twemoji Country Flags', 'SF Mono', 'Consolas', 'Monaco', 'Space Mono', monospace;
   font-variant-numeric: tabular-nums;
   font-size: 0.7rem;
   font-weight: 700;
@@ -950,7 +983,7 @@ h1, h2, h3, h4, h5, h6 {
 .row-down { grid-area: down; }
 
 .row-arrow {
-  font-family: 'Archivo Black', sans-serif;
+  font-family: 'Twemoji Country Flags', 'Archivo Black', sans-serif;
   font-size: 0.78rem;
   line-height: 1;
 }
@@ -969,7 +1002,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .row-speed-value {
-  font-family: 'SF Mono', 'Consolas', 'Monaco', 'Space Mono', monospace;
+  font-family: 'Twemoji Country Flags', 'SF Mono', 'Consolas', 'Monaco', 'Space Mono', monospace;
   font-variant-numeric: tabular-nums;
   font-size: 0.7rem;
   font-weight: 700;
@@ -1012,7 +1045,7 @@ h1, h2, h3, h4, h5, h6 {
 .row-uptime-value {
   align-self: end;
   justify-self: end;
-  font-family: 'SF Mono', 'Consolas', 'Monaco', 'Space Mono', monospace;
+  font-family: 'Twemoji Country Flags', 'SF Mono', 'Consolas', 'Monaco', 'Space Mono', monospace;
   font-variant-numeric: tabular-nums;
   font-size: 0.7rem;
   font-weight: 700;
@@ -1257,7 +1290,7 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--white);
   border: 3px solid var(--black);
   font-size: 24px;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Twemoji Country Flags', 'Space Grotesk', sans-serif;
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
@@ -1282,12 +1315,12 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Modal Content Styling */
 .modal-content {
-  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Twemoji Country Flags', 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .modal-content h2,
 .modal-content h3 {
-  font-family: 'Archivo Black', sans-serif;
+  font-family: 'Twemoji Country Flags', 'Archivo Black', sans-serif;
   text-transform: uppercase;
   letter-spacing: -0.02em;
 }
@@ -1299,7 +1332,7 @@ h1, h2, h3, h4, h5, h6 {
 .modal-content .network-channel-total strong,
 .modal-content .network-connections strong,
 .modal-content .load-chart-value {
-  font-family: 'Space Grotesk', 'SF Mono', 'Consolas', 'Monaco', monospace;
+  font-family: 'Twemoji Country Flags', 'Space Grotesk', 'SF Mono', 'Consolas', 'Monaco', monospace;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1324,7 +1357,7 @@ h1, h2, h3, h4, h5, h6 {
 .modal-node-status-tag {
   padding: 0.25rem 0.75rem;
   border: 2px solid var(--black);
-  font-family: 'Archivo Black', sans-serif;
+  font-family: 'Twemoji Country Flags', 'Archivo Black', sans-serif;
   text-transform: uppercase;
   font-size: 0.75rem;
 }
@@ -1380,7 +1413,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .info-value {
-  font-family: 'Space Grotesk', 'SF Mono', 'Consolas', 'Monaco', monospace;
+  font-family: 'Twemoji Country Flags', 'Space Grotesk', 'SF Mono', 'Consolas', 'Monaco', monospace;
   font-variant-numeric: tabular-nums;
   font-size: 0.85rem;
   font-weight: 700;
@@ -1619,7 +1652,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .load-chart-value {
-  font-family: 'SF Mono', monospace;
+  font-family: 'Twemoji Country Flags', 'SF Mono', monospace;
   font-size: 0.95rem;
   font-weight: 700;
   line-height: 1.25;
@@ -1710,7 +1743,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .chart-loading-text {
-  font-family: 'SF Mono', monospace;
+  font-family: 'Twemoji Country Flags', 'SF Mono', monospace;
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -1867,7 +1900,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .latency-task-latest {
-  font-family: 'SF Mono', monospace;
+  font-family: 'Twemoji Country Flags', 'SF Mono', monospace;
   font-weight: 700;
   font-size: 0.95rem;
 }
@@ -1877,7 +1910,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .latency-task-loss {
-  font-family: 'SF Mono', monospace;
+  font-family: 'Twemoji Country Flags', 'SF Mono', monospace;
   font-weight: 700;
   color: var(--text-muted);
 }
@@ -1925,7 +1958,7 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--white);
   color: var(--black);
   border: 2px solid var(--black);
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Twemoji Country Flags', 'Space Grotesk', sans-serif;
   font-weight: 700;
   font-size: 0.7rem;
   text-transform: uppercase;
@@ -2108,7 +2141,7 @@ h1, h2, h3, h4, h5, h6 {
 .auth-oauth a {
   border: 3px solid var(--black);
   border-radius: 0;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Twemoji Country Flags', 'Space Grotesk', sans-serif;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-decoration: none;
@@ -2213,8 +2246,8 @@ h1, h2, h3, h4, h5, h6 {
 .node-extras {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  margin-top: 1rem;
+  gap: var(--space-step, 0.75rem);
+  margin-top: var(--space-step, 0.75rem);
 }
 
 .node-extras[hidden] {
@@ -2254,7 +2287,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .x-value,
 .x-carrier-num {
-  font-family: 'SF Mono', 'Consolas', 'Monaco', 'Space Mono', monospace;
+  font-family: 'Twemoji Country Flags', 'SF Mono', 'Consolas', 'Monaco', 'Space Mono', monospace;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   white-space: nowrap;
@@ -2284,7 +2317,7 @@ h1, h2, h3, h4, h5, h6 {
 .x-carriers {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(var(--space-step, 0.75rem) / 2);
 }
 
 .x-carrier {
@@ -2295,7 +2328,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .x-carrier-label {
-  font-family: 'Archivo Black', sans-serif;
+  font-family: 'Twemoji Country Flags', 'Archivo Black', sans-serif;
   font-size: 0.6rem;
   line-height: 1.4;
   text-align: center;
@@ -2346,35 +2379,55 @@ h1, h2, h3, h4, h5, h6 {
 .x-seg.loss-4,
 .x-seg.loss-5 { box-shadow: inset 0 -4px 0 var(--sig-5), inset 0 -5px 0 var(--strip-gap, var(--black)); }
 
-/* List view: extras become a second line under the metrics. */
+/* List view: extras form two aligned lines on the row's own columns (subgrid).
+   Line 1: EXPIRES | VALUE | RESET | PER DAY under CPU | RAM | DISK | NET.
+   Line 2: CT under CPU+RAM, CU under DISK+NET, CM under UP+DOWN+UPTIME. */
 .node-row .node-extras {
-  grid-column: 2 / -1;
+  grid-column: name / -1;
   grid-row: 2;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 1rem;
-  margin-top: 0.5rem;
-  padding: 0.45rem 0.65rem 0;
+  display: grid;
+  grid-template-columns: subgrid;
+  row-gap: var(--space-step, 0.75rem);
+  column-gap: 0;
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
   border-top: 2px dashed var(--black);
 }
 
-.node-row .x-kv {
-  grid-auto-columns: auto;
+.node-row .x-kv,
+.node-row .x-carriers {
+  display: contents;
 }
 
 .node-row .x-cell {
-  min-width: 4.5rem;
+  grid-row: 1;
+  margin: 0 0.6rem;
+  border: 2px solid var(--black);
+  background: var(--bg);
 }
 
-.node-row .x-carriers {
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 0.4rem 1rem;
+.node-row .x-cell + .x-cell {
+  border-left: 2px solid var(--black);
 }
+
+.node-row .x-cell[data-k="expires"] { grid-column: 2; }
+.node-row .x-cell[data-k="value"] { grid-column: 3; }
+.node-row .x-cell[data-k="reset"] { grid-column: 4; }
+.node-row .x-cell[data-k="perday"] { grid-column: 5; }
 
 .node-row .x-carrier {
-  grid-template-columns: 2.1rem 3.3rem 8rem 3.1rem;
+  grid-row: 2;
+  margin: 0 0.6rem;
+  grid-template-columns: 2.1rem 3.3rem minmax(0, 1fr) 3.1rem;
+}
+
+.node-row .x-carrier[data-k="ct"] { grid-column: 2 / 4; }
+.node-row .x-carrier[data-k="cu"] { grid-column: 4 / 6; }
+.node-row .x-carrier[data-k="cm"] { grid-column: 6 / 9; }
+
+/* Without billing/traffic cells the carriers move up to line 1. */
+.node-row .node-extras:not(:has(.x-cell)) .x-carrier {
+  grid-row: 1;
 }
 
 /* Modal billing section spans the full info row. */
@@ -2390,4 +2443,140 @@ h1, h2, h3, h4, h5, h6 {
   .modal-billing-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* === Fork: header = 2 x 3 stats + pixel world map === */
+@media (min-width: 769px) {
+  .header.has-map .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.6fr);
+    overflow: visible;
+  }
+
+  .header.has-map .stat-item {
+    padding: 0.6rem 1rem;
+  }
+
+  .header.has-map .stat-item:nth-child(-n + 3) {
+    border-bottom: 3px solid var(--black);
+  }
+
+  .header.has-map .stat-item:nth-child(6) {
+    border-right: 3px solid var(--black);
+  }
+
+  .stats-map {
+    grid-column: 4;
+    grid-row: 1 / span 2;
+    position: relative;
+    min-height: 0;
+  }
+}
+
+.stats-map[hidden] {
+  display: none;
+}
+
+.map-frame {
+  position: absolute;
+  inset: 0.35rem 0.5rem;
+  container-type: size;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.map-box {
+  position: relative;
+  width: min(100cqw, calc(100cqh * 96 / 38));
+  aspect-ratio: 96 / 38;
+}
+
+.map-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: block;
+}
+
+.map-land {
+  fill: var(--black);
+  opacity: 0.26;
+  shape-rendering: crispEdges;
+}
+
+.map-link {
+  fill: none;
+  stroke: var(--black);
+  stroke-width: 0.35;
+  stroke-dasharray: 1 0.7;
+  stroke-linecap: square;
+  animation: map-flow 1.2s linear infinite;
+}
+
+.map-link.is-offline {
+  opacity: 0.35;
+  animation: none;
+}
+
+@keyframes map-flow {
+  to { stroke-dashoffset: -1.7; }
+}
+
+.map-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px;
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+  background: var(--white);
+  border: 2px solid var(--black);
+  box-shadow: 1px 1px 0 var(--black);
+  cursor: default;
+}
+
+.map-pin b {
+  font-family: 'Archivo Black', sans-serif;
+  font-size: 9px;
+  color: var(--black);
+}
+
+.map-pin:hover {
+  z-index: 2;
+}
+
+.map-pin.is-offline {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+.map-hub {
+  background: var(--black);
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-link {
+    animation: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .stats-map {
+    display: none !important;
+  }
+}
+
+/* Country flag before node names */
+.node-flag {
+  margin-right: 0.35em;
+  font-family: 'Twemoji Country Flags', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+  font-weight: 400;
 }

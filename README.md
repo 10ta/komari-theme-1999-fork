@@ -53,6 +53,14 @@ Fork of [r1cebucket/komari-theme-1999](https://github.com/r1cebucket/komari-them
   `@` 后为该 VPS 的 UTC 偏移小时数，不写则使用「VPS 默认时区」设置（默认 0，即 UTC）。当月没有该日期时（如 31 号）顺延到下月 1 号，与 agent 的规则一致。
 - 限制：填写的日期必须与 agent 实际参数一致；如果 agent 没有开启 `--month-rotate`，流量统计本身不会按月清零，此处显示的日均值也就不准确。
 
+### 国旗与世界地图
+
+- 卡片和列表的节点名前显示国旗。国旗来自节点的「地区」字段：Komari 的 GeoIP 会自动填入国旗 emoji，也可以在后台手动填写国旗或两位国家代码（如 `HK`）。
+- 页头统计改为两排三列，右侧是像素世界地图：每个有国家信息的节点在对应国家显示国旗，同一国家多台机器会显示数量；离线节点为灰色。
+- 各节点用流动虚线连到「地图连线终点」（默认 `CN`，留空则不画线）；跨越太平洋的连线会从地图边缘绕过去。
+- 屏幕宽度 ≤768px 时隐藏地图，恢复原来的统计布局。
+- Windows 自带字体不显示国旗，主题内置了 Twemoji 国旗字体，只作用于国旗字符。
+
 ### 配色主题
 
 后台「配色主题」可选 11 种：
@@ -67,6 +75,12 @@ Fork of [r1cebucket/komari-theme-1999](https://github.com/r1cebucket/komari-them
 详情弹窗新增 BILLING & TRAFFIC 区块：价格、到期日、剩余天数、剩余价值、重置日、下次重置时间、剩余流量、日均可用。
 
 延迟图中丢包不再把曲线打断：曲线保持连续，丢包样本以对应任务颜色的短竖线标在横轴上。
+
+### 不依赖第三方资源
+
+主题不再请求任何外部域名：ECharts、Archivo Black、Space Grotesk 和国旗字体都打包在 `src/vendor/` 中，随 release 发布（来源与许可证见 `src/vendor/LICENSES.md`）。
+
+构建时会给所有本地资源地址加上 `?v=<版本号>`，每次发版都是新地址。如果站点前面有 CDN（例如 Cloudflare 会默认缓存 `.js`/`.css`），升级后不会再拿到旧文件。从 v1.2.0 或更早版本升级时，需要在 CDN 里清一次缓存，因为旧版的地址没有带版本号。
 
 ## Installation
 
@@ -108,6 +122,9 @@ custom-body/         # Optional Komari custom-body snippets
 static/              # Theme cover image (`cover-image.png`) included in the packaged ZIP
 komari-theme.json    # Theme metadata and managed settings
 build-theme.sh       # ZIP packaging script
+tools/build.mjs      # Copies src/ to dist/ and adds ?v=<version> to local asset URLs
+tools/gen-worldmap.mjs  # Regenerates src/worldmap.js (dev only, see the file header)
+src/vendor/          # Bundled ECharts and fonts (see LICENSES.md)
 .github/workflows/   # CI build (build-ci.yml) and release on version bump (release.yml)
 ```
 
@@ -123,6 +140,8 @@ Settings are declared in `komari-theme.json` under `configuration` (`type: manag
 | Appearance | `cardStyle` | select: thick, thin, double | `thick` |
 | Appearance | `showUptime` | switch | on |
 | Appearance | `showLoginButton` | switch | on |
+| Appearance | `showWorldMap` | switch | on |
+| Appearance | `mapHub` | string, ISO 3166 alpha-2 code | `CN` |
 | Carrier latency | `carrierPingEnabled` | switch | on |
 | Carrier latency | `carrierPingHours` | number (1-720) | `24` |
 | Carrier latency | `carrierCtTasks` / `carrierCuTasks` / `carrierCmTasks` | Ping task picker | empty (auto by name) |
@@ -167,6 +186,8 @@ The template preserves the required title, description, `</head>`, and `</body>`
 Special thanks to [komari-theme-naive](https://github.com/lyimoexiao/komari-theme-naive) by [lyimoexiao](https://github.com/lyimoexiao). Its chart presentation, historical-data handling, and packaging approach provided valuable reference and inspiration.
 
 The fork's carrier latency, billing and release-on-version-bump features follow the approach of [Glassmorphism-Enhanced](https://github.com/casiuna/Glassmorphism-Enhanced) by casiuna.
+
+Country flag artwork comes from [Twemoji](https://github.com/twitter/twemoji) (© Twitter, Inc and other contributors, CC BY 4.0) via [country-flag-emoji-polyfill](https://github.com/talkjs/country-flag-emoji-polyfill). Map data: [Natural Earth](https://www.naturalearthdata.com/) (public domain).
 
 ## License
 
