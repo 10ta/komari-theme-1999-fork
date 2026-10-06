@@ -2807,11 +2807,44 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Footer sits at the bottom of the card, so footers line up across a row. */
 .node-spacer {
-  flex: 1 0 1.5rem;
+  flex: 1 0 var(--space-step);
+}
+
+/* One vertical step everywhere in a card: around both rule lines and between all blocks. */
+.node-card > .node-header {
+  padding-bottom: var(--space-step);
+  margin-bottom: var(--space-step);
+}
+
+.node-card .metrics {
+  gap: var(--space-step);
 }
 
 .node-card > .node-footer {
   margin-top: 0;
+  padding-top: var(--space-step);
+}
+
+/* Carrier block: the three rows share one set of columns, so every gap is the same and the
+   loss figures end flush with the card's right edge like every other value. Number columns are
+   at least 5 characters wide so strips line up across cards. */
+.node-card .x-carriers {
+  display: grid;
+  grid-template-columns: auto minmax(5ch, auto) minmax(0, 1fr) minmax(5ch, auto);
+  column-gap: var(--carrier-gap, 0.5rem);
+  row-gap: calc(var(--space-step) / 2);
+  align-items: center;
+  font-family: 'Twemoji Country Flags', 'SF Mono', 'Consolas', 'Monaco', 'Space Mono', monospace;
+  font-size: 0.72rem;
+}
+
+.node-card .x-carrier {
+  display: contents;
+}
+
+.node-card .x-carrier-num.x-lat,
+.node-card .x-carrier-num.x-loss {
+  text-align: right;
 }
 
 .x-cell.x-empty .x-value {
