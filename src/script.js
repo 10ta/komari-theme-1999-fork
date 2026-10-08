@@ -57,7 +57,36 @@
     'solarized-light', 'github-light', 'gruvbox-light', 'catppuccin-light', 'tokyonight-light',
     'tokyonight-dark', 'dracula-dark', 'monokai-dark', 'nord-dark', 'gruvbox-dark', 'catppuccin-dark'
   ];
-  const SCHEME_STORAGE_KEY = 'komari1999.colorScheme';
+  const SCHEME_STORAGE_KEY = 'komari1999.colorScheme';   // last applied (anti-flash on load)
+  const USER_SCHEME_KEY = 'komari1999.userScheme';       // visitor's own choice, overrides the admin default
+
+  // Swatch colours for the theme menu: [paper, accent, ink].
+  const SCHEME_INFO = {
+    'yellow-light': ['Yellow', '#ffffff', '#FFE600', '#000000'],
+    'red-light': ['Red', '#ffffff', '#FF3333', '#000000'],
+    'blue-light': ['Blue', '#ffffff', '#0d6eff', '#000000'],
+    'green-light': ['Green', '#ffffff', '#00CC66', '#000000'],
+    'purple-light': ['Purple', '#ffffff', '#9B5DE5', '#000000'],
+    'solarized-light': ['Solarized', '#fdf6e3', '#bc9417', '#073642'],
+    'github-light': ['GitHub', '#ffffff', '#54aeff', '#1f2328'],
+    'gruvbox-light': ['Gruvbox', '#fbf1c7', '#d79921', '#282828'],
+    'catppuccin-light': ['Catppuccin Latte', '#eff1f5', '#8839ef', '#4c4f69'],
+    'tokyonight-light': ['Tokyo Night Day', '#e9e9ed', '#2564ba', '#3760bf'],
+    'tokyonight-dark': ['Tokyo Night', '#24283b', '#7aa2f7', '#c0caf5'],
+    'dracula-dark': ['Dracula', '#282a36', '#ff79c6', '#f8f8f2'],
+    'monokai-dark': ['Monokai', '#272822', '#e6db74', '#f8f8f2'],
+    'nord-dark': ['Nord', '#3b4252', '#88c0d0', '#eceff4'],
+    'gruvbox-dark': ['Gruvbox', '#282828', '#fe8019', '#ebdbb2'],
+    'catppuccin-dark': ['Catppuccin Mocha', '#1e1e2e', '#cba6f7', '#cdd6f4'],
+  };
+
+  function readStorage(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  }
+
+  function writeStorage(key, value) {
+    try { value == null ? localStorage.removeItem(key) : localStorage.setItem(key, value); } catch (e) { /* unavailable */ }
+  }
 
   function cssVar(name, fallback) {
     const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -71,7 +100,7 @@
 
   // Apply the last used scheme before data arrives so dark themes do not flash white.
   try {
-    const savedScheme = localStorage.getItem(SCHEME_STORAGE_KEY);
+    const savedScheme = localStorage.getItem(USER_SCHEME_KEY) || localStorage.getItem(SCHEME_STORAGE_KEY);
     if (COLOR_SCHEMES.includes(savedScheme)) document.documentElement.dataset.scheme = savedScheme;
   } catch (e) { /* storage unavailable */ }
 
@@ -719,7 +748,7 @@
     alignQueued = true;
     requestAnimationFrame(() => {
       alignQueued = false;
-      document.querySelectorAll('.x-strip-canvas').forEach(alignCanvas);
+      document.querySelectorAll('.x-strip-canvas, .map-stage').forEach(alignCanvas);
     });
   }
   window.addEventListener('scroll', alignAllCanvases, { passive: true });
@@ -843,40 +872,130 @@
     return node.region ? `<span class="node-flag" title="${escapeHtml(node.region)}">${escapeHtml(node.region)}</span>` : '';
   }
 
-  const worldMap = { landPath: null, signature: '', offset: 0, last: 0, dragging: false, hovering: false, bound: false };
+  // Pixel map: integer cell pitch P (device px), drawn on a canvas and scrolled by whole device pixels,
+  // so every cell is the same size in every frame (spinning, paused or dragged) at any zoom.
+  const worldMap = {
+    offset: 0, last: 0, dragging: false, hovering: false, bound: false,
+    signature: '', pins: [], links: [], geo: null, tile: null, tileKey: '', colors: null,
+  };
 
   function mapPoint(lon, lat) {
     const m = window.KOMARI_WORLDMAP;
     return [(lon - m.lon0) / m.cell, Math.min(m.rows, Math.max(0, (m.lat0 - lat) / m.cell))];
   }
 
-  function buildLandPath() {
+  function landCells() {
     const m = window.KOMARI_WORLDMAP;
+    if (worldMap.cells) return worldMap.cells;
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-    let d = '';
+    const cells = [];
     let index = 0;
     for (const ch of m.mask) {
       const value = alphabet.indexOf(ch);
       for (let bit = 5; bit >= 0; bit--, index++) {
-        if (!((value >> bit) & 1) || index >= m.cols * m.rows) continue;
-        const x = index % m.cols, y = Math.floor(index / m.cols);
-        d += `M${x + 0.12} ${y + 0.12}h0.76v0.76h-0.76zM${x + m.cols + 0.12} ${y + 0.12}h0.76v0.76h-0.76z`;
+        if ((value >> bit) & 1 && index < m.cols * m.rows) cells.push([index % m.cols, Math.floor(index / m.cols)]);
       }
     }
-    return d;
+    return (worldMap.cells = cells);
   }
 
-  // Curved link from a node to the hub; drawn twice (shifted by the map width) when the shorter way
-  // crosses the date line, so e.g. US -> CN leaves the right edge and re-enters on the left.
-  function linkPaths(from, to, cols) {
-    let [x1, y1] = from, [x2, y2] = to;
-    const shift = Math.abs(x2 - x1) > cols / 2 ? (x2 > x1 ? -cols : cols) : 0;
-    const curve = (ax, ay, bx, by) => {
-      const lift = Math.min(6, Math.hypot(bx - ax, by - ay) * 0.22);
-      return `M${ax.toFixed(2)} ${ay.toFixed(2)}Q${((ax + bx) / 2).toFixed(2)} ${(Math.min(ay, by) - lift).toFixed(2)} ${bx.toFixed(2)} ${by.toFixed(2)}`;
-    };
-    if (!shift) return [curve(x1, y1, x2, y2)];
-    return [curve(x1, y1, x2 + shift, y2), curve(x1 - shift, y1, x2, y2)];
+  // Smallest device length >= target whose CSS size is exact in layout units (1/64 px).
+  function exactAtLeast(target, dpr) {
+    for (let w = Math.ceil(target); w < Math.ceil(target) + 64; w++) {
+      const units = w / dpr * 64;
+      if (Math.abs(units - Math.round(units)) < 1e-6) return w;
+    }
+    return Math.ceil(target);
+  }
+
+  function layoutWorldMap() {
+    const m = window.KOMARI_WORLDMAP;
+    const box = document.querySelector('.map-box');
+    const stage = document.querySelector('.map-stage');
+    const canvas = document.querySelector('.map-canvas');
+    if (!m || !box || !stage || !canvas) return null;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = box.getBoundingClientRect();
+    const boxW = Math.floor(rect.width * dpr), boxH = Math.floor(rect.height * dpr);
+    // Nearest whole pitch: the map may be a few px larger than the box and is cropped at the edges,
+    // which suits a scrolling globe better than leaving a band of empty space.
+    const P = Math.max(2, Math.round(Math.min(boxW / m.cols, boxH / m.rows)));
+    const W = P * m.cols, H = P * m.rows;
+    const bw = exactAtLeast(W, dpr), bh = exactAtLeast(H, dpr);         // canvas backing, 1:1 with screen
+    if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; }
+    canvas.style.width = `${bw / dpr}px`;
+    canvas.style.height = `${bh / dpr}px`;
+    stage.style.width = `${W / dpr}px`;
+    stage.style.height = `${H / dpr}px`;
+    stage.style.left = `${Math.floor((boxW - W) / 2) / dpr}px`;
+    stage.style.top = `${Math.floor((boxH - H) / 2) / dpr}px`;
+    worldMap.geo = { dpr, P, W, H };
+    alignCanvas(stage);
+    return worldMap.geo;
+  }
+
+  function buildLandTile(geo) {
+    const m = window.KOMARI_WORLDMAP;
+    const stage = document.querySelector('.map-stage');
+    const ink = resolveColor(stage, 'var(--black)', '#000');
+    const key = `${geo.P}|${ink}`;
+    if (worldMap.tileKey === key) return;
+    const tile = document.createElement('canvas');
+    tile.width = geo.W;
+    tile.height = geo.H;
+    const ctx = tile.getContext('2d');
+    const gap = Math.max(1, Math.round(geo.P * 0.24));
+    const size = geo.P - gap, inset = Math.floor(gap / 2);
+    ctx.fillStyle = ink;
+    ctx.globalAlpha = 0.26;
+    for (const [x, y] of landCells()) ctx.fillRect(x * geo.P + inset, y * geo.P + inset, size, size);
+    worldMap.tile = tile;
+    worldMap.tileKey = key;
+    worldMap.colors = { ink };
+  }
+
+  function drawWorldMap(now) {
+    const geo = worldMap.geo;
+    const canvas = document.querySelector('.map-canvas');
+    if (!geo || !canvas || !worldMap.tile) return;
+    const m = window.KOMARI_WORLDMAP;
+    const { P, W, H } = geo;
+    const off = ((Math.round(worldMap.offset * P) % W) + W) % W;      // whole device pixels
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, W, H);
+    ctx.clip();
+    ctx.drawImage(worldMap.tile, -off, 0);
+    ctx.drawImage(worldMap.tile, W - off, 0);
+
+    // Dashed links, flowing toward the hub.
+    const flow = worldMap.animate ? (now / 1200) * 1.7 * P : 0;
+    ctx.lineWidth = Math.max(1, Math.round(0.35 * P));
+    ctx.lineCap = 'butt';
+    ctx.setLineDash([Math.max(2, Math.round(P)), Math.max(1, Math.round(0.7 * P))]);
+    ctx.strokeStyle = worldMap.colors.ink;
+    for (const link of worldMap.links) {
+      ctx.globalAlpha = link.live ? 1 : 0.35;
+      ctx.lineDashOffset = link.live ? -flow : 0;
+      for (const shift of [-W, 0, W]) {
+        const [ax, ay, cx, cy, bx, by] = link.pts.map((v, i) => (i % 2 === 0 ? v * P - off + shift : v * P));
+        if (Math.max(ax, bx, cx) < -P || Math.min(ax, bx, cx) > W + P) continue;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.quadraticCurveTo(cx, cy, bx, by);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+
+    // Pins: two copies so a pin crossing the edge appears on the other side; whole device pixels.
+    worldMap.pinEls.forEach(({ el, x }) => {
+      const a = ((Math.round(x * P) - off) % W + W) % W;
+      el.style.left = `${a / geo.dpr}px`;
+      el.nextSibling.style.left = `${(a < W / 2 ? a + W : a - W) / geo.dpr}px`;
+    });
   }
 
   function renderWorldMap() {
@@ -888,14 +1007,8 @@
     box.hidden = !enabled;
     if (header) header.classList.toggle('has-map', enabled);
     if (!enabled) return;
+    startWorldMapMotion();
 
-    if (!worldMap.landPath) {
-      worldMap.landPath = buildLandPath();
-      box.querySelector('.map-land').setAttribute('d', worldMap.landPath);
-      startWorldMapMotion();
-    }
-
-    // Group nodes by country.
     const groups = new Map();
     state.nodes.forEach(node => {
       const code = regionCode(node.region);
@@ -909,65 +1022,72 @@
     const hubCode = String(getSetting('mapHub', 'CN')).trim().toUpperCase();
     const hub = m.anchors[hubCode] ? mapPoint(...m.anchors[hubCode]) : null;
     const signature = JSON.stringify([hubCode, Array.from(groups.values())]);
-    if (signature === worldMap.signature) return;
-    worldMap.signature = signature;
-
-    const links = [];
-    const pins = [];
-    groups.forEach(group => {
-      const point = mapPoint(...m.anchors[group.code]);
-      const live = group.online > 0;
-      const tip = `${group.code} · ${group.names.join(', ')}${live ? '' : ' (offline)'}`;
-      const label = `${flagEmoji(group.code)}${group.names.length > 1 ? `<b>${group.names.length}</b>` : ''}`;
-      for (const copy of [0, m.cols]) {
+    if (signature !== worldMap.signature) {
+      worldMap.signature = signature;
+      const links = [], pins = [];
+      groups.forEach(group => {
+        const point = mapPoint(...m.anchors[group.code]);
+        const live = group.online > 0;
         if (hub && group.code !== hubCode) {
-          linkPaths([point[0] + copy, point[1]], [hub[0] + copy, hub[1]], m.cols)
-            .forEach(d => links.push(`<path class="map-link${live ? '' : ' is-offline'}" d="${d}"></path>`));
+          // Take the shorter way round: across the date line when that is closer.
+          let [x1, y1] = point, [x2, y2] = hub;
+          if (Math.abs(x2 - x1) > m.cols / 2) x2 += x2 > x1 ? -m.cols : m.cols;
+          const lift = Math.min(6, Math.hypot(x2 - x1, y2 - y1) * 0.22);
+          links.push({ live, pts: [x1, y1, (x1 + x2) / 2, Math.min(y1, y2) - lift, x2, y2] });
         }
-        pins.push(mapPinHtml(point[0] + copy, point[1], `map-pin${live ? '' : ' is-offline'}`, tip, label));
-      }
-    });
-    if (hub && !groups.has(hubCode)) {
-      for (const copy of [0, m.cols]) pins.push(mapPinHtml(hub[0] + copy, hub[1], 'map-pin map-hub', `${hubCode} · hub`, flagEmoji(hubCode)));
+        pins.push({ x: point[0], y: point[1], cls: `map-pin${live ? '' : ' is-offline'}`,
+          tip: `${group.code} · ${group.names.join(', ')}${live ? '' : ' (offline)'}`,
+          label: `${flagEmoji(group.code)}${group.names.length > 1 ? `<b>${group.names.length}</b>` : ''}` });
+      });
+      if (hub && !groups.has(hubCode)) pins.push({ x: hub[0], y: hub[1], cls: 'map-pin map-hub', tip: `${hubCode} · hub`, label: flagEmoji(hubCode) });
+      worldMap.links = links;
+      const layer = box.querySelector('.map-pins');
+      layer.innerHTML = pins.map(pin => {
+        const one = `<span class="${pin.cls}" style="top:${(pin.y / m.rows * 100).toFixed(2)}%" title="${escapeHtml(pin.tip)}">${pin.label}</span>`;
+        return one + one;
+      }).join('');
+      const els = layer.children;
+      worldMap.pinEls = pins.map((pin, i) => ({ el: els[i * 2], x: pin.x }));
     }
-    box.querySelector('.map-links').innerHTML = links.join('');
-    box.querySelector('.map-pins').innerHTML = pins.join('');
+    worldMap.tileKey = '';                       // colours may have changed with the scheme
+    if (layoutWorldMap()) { buildLandTile(worldMap.geo); drawWorldMap(performance.now()); }
   }
 
-  // Pins are positioned on the double-width strip (two copies of the map).
-  function mapPinHtml(x, y, cls, tip, label) {
+  function setMapOffset(offset) {
     const m = window.KOMARI_WORLDMAP;
-    return `<span class="${cls}" style="left:${(x / (m.cols * 2) * 100).toFixed(3)}%;top:${(y / m.rows * 100).toFixed(2)}%" title="${escapeHtml(tip)}">${label}</span>`;
+    worldMap.offset = ((offset % m.cols) + m.cols) % m.cols;
   }
 
   // Globe-style endless scroll: west -> east at `mapSpinSeconds` per revolution (0 = off), plus drag.
-  function setMapOffset(offset) {
-    const m = window.KOMARI_WORLDMAP;
-    const strip = document.querySelector('.map-strip');
-    if (!strip) return;
-    worldMap.offset = ((offset % m.cols) + m.cols) % m.cols;
-    strip.style.transform = `translateX(${(-worldMap.offset / (m.cols * 2) * 100).toFixed(4)}%)`;
-  }
-
   function startWorldMapMotion() {
     const box = document.querySelector('.map-box');
     const m = window.KOMARI_WORLDMAP;
     if (!box || !m || worldMap.bound) return;
     worldMap.bound = true;
+    worldMap.pinEls = [];
     const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    worldMap.animate = !reduceMotion;
 
     const tick = now => {
       const dt = worldMap.last ? Math.min(0.1, (now - worldMap.last) / 1000) : 0;
       worldMap.last = now;
-      const seconds = Number(getSetting('mapSpinSeconds', 120)) || 0;
       const map = document.getElementById('stats-map');
-      if (seconds > 0 && !reduceMotion && !worldMap.dragging && !worldMap.hovering && map && map.offsetWidth > 0 && !document.hidden) {
-        // Content moves west -> east, so the visible window slides toward lower longitudes.
-        setMapOffset(worldMap.offset - m.cols / seconds * dt);
+      const visible = map && !map.hidden && map.offsetWidth > 0 && !document.hidden;
+      if (visible) {
+        const seconds = Number(getSetting('mapSpinSeconds', 120)) || 0;
+        if (seconds > 0 && !reduceMotion && !worldMap.dragging && !worldMap.hovering) {
+          // Content moves west -> east, so the visible window slides toward lower longitudes.
+          setMapOffset(worldMap.offset - m.cols / seconds * dt);
+        }
+        if (worldMap.geo && worldMap.tile) drawWorldMap(now);
       }
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
+
+    if ('ResizeObserver' in window) {
+      new ResizeObserver(() => { if (layoutWorldMap()) buildLandTile(worldMap.geo); }).observe(box);
+    }
 
     let startX = 0, startOffset = 0;
     box.addEventListener('pointerenter', () => { worldMap.hovering = true; });
@@ -980,24 +1100,148 @@
       box.setPointerCapture(e.pointerId);
     });
     box.addEventListener('pointermove', e => {
-      if (!worldMap.dragging) return;
-      const width = box.getBoundingClientRect().width || 1;
-      setMapOffset(startOffset - (e.clientX - startX) / width * m.cols);
+      if (!worldMap.dragging || !worldMap.geo) return;
+      setMapOffset(startOffset - (e.clientX - startX) * worldMap.geo.dpr / worldMap.geo.P);
     });
     const endDrag = () => { worldMap.dragging = false; box.classList.remove('is-dragging'); };
     box.addEventListener('pointerup', endDrag);
     box.addEventListener('pointercancel', endDrag);
   }
 
-  function applySettings() {
+  function adminScheme() {
     const legacyAccent = state.settings.accentColor ? `${state.settings.accentColor}-light` : null;
     const requested = state.settings.colorScheme || legacyAccent;
-    const scheme = COLOR_SCHEMES.includes(requested) ? requested : 'yellow-light';
+    return COLOR_SCHEMES.includes(requested) ? requested : 'yellow-light';
+  }
+
+  function userScheme() {
+    const value = readStorage(USER_SCHEME_KEY);
+    return COLOR_SCHEMES.includes(value) ? value : null;
+  }
+
+  function currentScheme() {
+    return userScheme() || adminScheme();
+  }
+
+  // ===== Theme menu (visitor override of the admin colour scheme) =====
+  function swatchHtml(scheme) {
+    const [, paper, accent, ink] = SCHEME_INFO[scheme] || SCHEME_INFO['yellow-light'];
+    return `<span class="theme-swatch" style="--sw-paper:${paper};--sw-accent:${accent};--sw-ink:${ink}" aria-hidden="true"></span>`;
+  }
+
+  function themeItemHtml(choice, label, scheme) {
+    return `<button class="theme-item" type="button" role="menuitemradio" aria-checked="false" data-choice="${choice}">${swatchHtml(scheme)}<span class="theme-item-label">${escapeHtml(label)}</span></button>`;
+  }
+
+  function buildThemeMenu() {
+    if (document.getElementById('theme-menu')) return document.getElementById('theme-menu');
+    const menu = document.createElement('div');
+    menu.id = 'theme-menu';
+    menu.className = 'theme-menu';
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', 'Theme');
+    menu.hidden = true;
+    const group = suffix => COLOR_SCHEMES.filter(k => k.endsWith(suffix)).map(k => themeItemHtml(k, SCHEME_INFO[k][0], k)).join('');
+    menu.innerHTML = `
+      <div class="theme-menu-head">THEME</div>
+      <div class="theme-menu-default"></div>
+      <div class="theme-menu-cols">
+        <div class="theme-menu-group" role="group" aria-label="Light"><div class="theme-menu-label">LIGHT</div>${group('-light')}</div>
+        <div class="theme-menu-group" role="group" aria-label="Dark"><div class="theme-menu-label">DARK</div>${group('-dark')}</div>
+      </div>`;
+    document.body.appendChild(menu);
+    menu.addEventListener('click', e => {
+      const item = e.target.closest('.theme-item');
+      if (!item) return;
+      writeStorage(USER_SCHEME_KEY, item.dataset.choice === 'default' ? null : item.dataset.choice);
+      applySettings();
+      closeThemeMenu(true);
+    });
+    menu.addEventListener('keydown', e => {
+      const items = Array.from(menu.querySelectorAll('.theme-item'));
+      const i = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+      } else if (e.key === 'Home' || e.key === 'End') {
+        e.preventDefault();
+        items[e.key === 'Home' ? 0 : items.length - 1].focus();
+      } else if (e.key === 'Escape' || e.key === 'Tab') {
+        if (e.key === 'Escape') e.preventDefault();
+        closeThemeMenu(e.key === 'Escape');
+      }
+    });
+    return menu;
+  }
+
+  function syncThemeMenu() {
+    const menu = document.getElementById('theme-menu');
+    if (!menu) return;
+    const admin = adminScheme(), user = userScheme();
+    menu.querySelector('.theme-menu-default').innerHTML =
+      themeItemHtml('default', `Default · ${SCHEME_INFO[admin][0]}${admin.endsWith('-dark') ? ' (dark)' : ''}`, admin);
+    menu.querySelectorAll('.theme-item').forEach(item => {
+      const on = user ? item.dataset.choice === user : item.dataset.choice === 'default';
+      item.setAttribute('aria-checked', String(on));
+    });
+  }
+
+  function positionThemeMenu() {
+    const menu = document.getElementById('theme-menu');
+    const button = document.querySelector('.btn-theme');
+    if (!menu || menu.hidden || !button) return;
+    const r = button.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    // Right-align with the button, but keep the whole menu on screen (8px margin) on narrow screens.
+    const right = Math.min(Math.max(8, Math.round(vw - r.right)), Math.max(8, vw - menu.offsetWidth - 8));
+    menu.style.top = `${Math.round(r.bottom + 10)}px`;
+    menu.style.right = `${right}px`;
+  }
+
+  function openThemeMenu() {
+    const menu = buildThemeMenu();
+    syncThemeMenu();
+    menu.hidden = false;
+    positionThemeMenu();
+    document.querySelector('.btn-theme').setAttribute('aria-expanded', 'true');
+    document.querySelector('.btn-theme').classList.add('active');
+    (menu.querySelector('.theme-item[aria-checked="true"]') || menu.querySelector('.theme-item')).focus();
+  }
+
+  function closeThemeMenu(returnFocus) {
+    const menu = document.getElementById('theme-menu');
+    const button = document.querySelector('.btn-theme');
+    if (!menu || menu.hidden) return;
+    menu.hidden = true;
+    if (button) {
+      button.setAttribute('aria-expanded', 'false');
+      button.classList.remove('active');
+      if (returnFocus) button.focus();
+    }
+  }
+
+  function bindThemeMenu() {
+    const button = document.querySelector('.btn-theme');
+    if (!button) return;
+    button.addEventListener('click', () => {
+      const menu = document.getElementById('theme-menu');
+      if (menu && !menu.hidden) closeThemeMenu(false); else openThemeMenu();
+    });
+    document.addEventListener('pointerdown', e => {
+      if (!e.target.closest('#theme-menu, .btn-theme')) closeThemeMenu(false);
+    });
+    window.addEventListener('resize', positionThemeMenu);
+    window.addEventListener('scroll', () => closeThemeMenu(false), { passive: true });
+  }
+
+  function applySettings() {
+    const scheme = currentScheme();
     const cardStyle = state.settings.cardStyle || 'thick';
     const showUptime = state.settings.showUptime !== false;
 
     document.documentElement.dataset.scheme = scheme;
-    try { localStorage.setItem(SCHEME_STORAGE_KEY, scheme); } catch (e) { /* storage unavailable */ }
+    writeStorage(SCHEME_STORAGE_KEY, scheme);
+    syncThemeMenu();
 
     document.body.classList.remove('card-style-thin', 'card-style-double');
     if (cardStyle === 'thin') {
@@ -1766,7 +2010,7 @@
   function setViewMode(mode) {
     state.viewMode = mode;
     localStorage.setItem('nodeViewMode', mode);
-    document.querySelectorAll('.btn-view').forEach(btn => {
+    document.querySelectorAll('.btn-view[data-view]').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.view === mode);
     });
     elements.container.className = `nodes-container${mode === 'list' ? ' list-view' : ''}`;
@@ -2462,7 +2706,8 @@
   }
 
   function init() {
-    document.querySelectorAll('.btn-view').forEach(btn => {
+    bindThemeMenu();
+    document.querySelectorAll('.btn-view[data-view]').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.view === state.viewMode);
       btn.addEventListener('click', () => setViewMode(btn.dataset.view));
     });
