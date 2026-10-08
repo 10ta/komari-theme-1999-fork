@@ -5,7 +5,7 @@
     "zh-CN": "Neo-Brutalism 风格 Komari 主题（Fork）：三网延迟与丢包、剩余天数与价值、流量重置日与日均可用流量",
     "en": "Neo-Brutalism dashboard for Komari Monitor (fork) with CT/CU/CM latency & loss, billing and traffic-plan info"
   },
-  "version": "1.4.0",
+  "version": "1.4.1",
   "author": "ricebucket, 10ta",
   "url": "https://github.com/10ta/komari-theme-1999-fork",
   "preview": "static/cover-image.png",
@@ -28,6 +28,8 @@
 
       { "key": "showWorldMap", "type": "switch", "default": true,
         "name": { "zh-CN": "页头显示世界地图", "en": "Show world map in header" }, "help": { "zh-CN": "页头统计改为两排三列，右侧显示像素世界地图与节点国旗（宽度 ≤768px 时隐藏）", "en": "Stats become 2 x 3 with a pixel world map of node flags on the right (hidden at ≤768px)" } },
+      { "key": "mapFps", "type": "number", "default": 60,
+        "name": { "zh-CN": "地图帧率（fps）", "en": "Map frame rate (fps)" }, "help": { "zh-CN": "地图滚动的帧率上限，由浏览器合成层（GPU）执行，不占用页面主线程。默认 60；填 0 则跟随显示器刷新率（如 120/144Hz）；低功耗设备可填 30", "en": "Frame-rate cap for the map scroll, run on the browser compositor. Default 60; 0 = display refresh rate; 30 for low-power devices" } },
       { "key": "mapHub", "type": "string", "default": "CN",
         "name": { "zh-CN": "地图连线终点（国家代码）", "en": "Map link hub (country code)" }, "help": { "zh-CN": "各节点国旗用动画虚线连到这个国家，填 ISO 两位代码如 CN、HK；留空则不画连线", "en": "Two-letter ISO code each node links to, e.g. CN; empty = no links" } },
 

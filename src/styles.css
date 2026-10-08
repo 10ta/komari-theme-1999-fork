@@ -2672,20 +2672,61 @@ h1, h2, h3, h4, h5, h6 {
   cursor: grabbing;
 }
 
-/* Canvas + pins, positioned on whole device pixels by layoutWorldMap(). */
+/* Stage on whole device pixels (layoutWorldMap); the strip inside holds two copies of the world and
+   is moved by a compositor animation (syncMapAnimation). */
 .map-stage {
   position: absolute;
   top: 0;
   left: 0;
 }
 
-.map-canvas {
+.map-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+}
+
+.map-canvas,
+.map-links {
   position: absolute;
   top: 0;
   left: 0;
   display: block;
-  image-rendering: pixelated;
   pointer-events: none;
+}
+
+/* At rest the strip sits on a whole device pixel: show the canvas 1:1 with no filtering. */
+.map-strip.is-still .map-canvas {
+  image-rendering: pixelated;
+}
+
+/* Own layer, so the flowing dashes repaint only themselves, never the land. */
+.map-links {
+  overflow: visible;
+  will-change: transform;
+}
+
+.map-link {
+  fill: none;
+  stroke: var(--black);
+  stroke-linecap: butt;
+  animation: map-flow 1.2s linear infinite;
+}
+
+.map-link.is-offline {
+  opacity: 0.35;
+  animation: none;
+}
+
+@keyframes map-flow {
+  to { stroke-dashoffset: calc(-1 * var(--dash-period, 3px)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-link {
+    animation: none;
+  }
 }
 
 .map-pins {
@@ -2933,11 +2974,17 @@ body::before {
 
 .theme-swatch {
   flex: 0 0 auto;
+  position: relative;
   width: 18px;
   height: 18px;
-  border: 2px solid var(--sw-ink);
-  background: linear-gradient(90deg, var(--sw-paper) 50%, var(--sw-accent) 50%);
-  box-shadow: 0 0 0 1px var(--white);
+}
+
+.theme-swatch canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  image-rendering: pixelated;
 }
 
 @media (max-width: 520px) {

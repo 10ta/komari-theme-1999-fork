@@ -748,7 +748,7 @@
     alignQueued = true;
     requestAnimationFrame(() => {
       alignQueued = false;
-      document.querySelectorAll('.x-strip-canvas, .map-stage').forEach(alignCanvas);
+      document.querySelectorAll('.x-strip-canvas').forEach(alignCanvas);
     });
   }
   window.addEventListener('scroll', alignAllCanvases, { passive: true });
@@ -872,11 +872,14 @@
     return node.region ? `<span class="node-flag" title="${escapeHtml(node.region)}">${escapeHtml(node.region)}</span>` : '';
   }
 
-  // Pixel map: integer cell pitch P (device px), drawn on a canvas and scrolled by whole device pixels,
-  // so every cell is the same size in every frame (spinning, paused or dragged) at any zoom.
+  // Pixel map. Land, links and pins live on a strip holding two copies of the world (2W wide), drawn
+  // only when size, data or colours change. The strip is moved by a compositor-driven Web Animation,
+  // so motion is smooth at the display rate (or the configured fps) and never stalls on main-thread
+  // work. Every cell shares the same sub-pixel phase while moving, so all cells look identical; when
+  // paused the strip snaps to a whole device pixel and is perfectly crisp.
   const worldMap = {
-    offset: 0, last: 0, dragging: false, hovering: false, bound: false,
-    signature: '', pins: [], links: [], geo: null, tile: null, tileKey: '', colors: null,
+    signature: '', pins: [], links: [], geo: null, anim: null, hovering: false, dragging: false,
+    bound: false, timingKey: '', paintKey: '',
   };
 
   function mapPoint(lon, lat) {
@@ -908,94 +911,158 @@
     return Math.ceil(target);
   }
 
+  function mapTiming() {
+    const seconds = Number(getSetting('mapSpinSeconds', 120)) || 0;
+    const fps = Number(getSetting('mapFps', 60));
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    return { seconds: reduce ? 0 : Math.max(0, seconds), fps: Number.isFinite(fps) ? Math.max(0, fps) : 60 };
+  }
+
+  // Fraction of one revolution currently shown (0..1), read from the running animation.
+  function mapPhase() {
+    const a = worldMap.anim;
+    if (!a || !a.effect) return worldMap.phase || 0;
+    const d = a.effect.getTiming().duration;
+    return d > 0 ? (((a.currentTime || 0) % d) + d) % d / d : 0;
+  }
+
   function layoutWorldMap() {
     const m = window.KOMARI_WORLDMAP;
     const box = document.querySelector('.map-box');
     const stage = document.querySelector('.map-stage');
-    const canvas = document.querySelector('.map-canvas');
-    if (!m || !box || !stage || !canvas) return null;
+    if (!m || !box || !stage) return null;
     const dpr = window.devicePixelRatio || 1;
     const rect = box.getBoundingClientRect();
+    if (!(rect.width > 0)) return null;
     const boxW = Math.floor(rect.width * dpr), boxH = Math.floor(rect.height * dpr);
-    // Nearest whole pitch: the map may be a few px larger than the box and is cropped at the edges,
-    // which suits a scrolling globe better than leaving a band of empty space.
+    // Nearest whole pitch: the map may be a few px larger than the box and is cropped at the edges.
     const P = Math.max(2, Math.round(Math.min(boxW / m.cols, boxH / m.rows)));
     const W = P * m.cols, H = P * m.rows;
-    const bw = exactAtLeast(W, dpr), bh = exactAtLeast(H, dpr);         // canvas backing, 1:1 with screen
-    if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; }
-    canvas.style.width = `${bw / dpr}px`;
-    canvas.style.height = `${bh / dpr}px`;
     stage.style.width = `${W / dpr}px`;
     stage.style.height = `${H / dpr}px`;
-    stage.style.left = `${Math.floor((boxW - W) / 2) / dpr}px`;
-    stage.style.top = `${Math.floor((boxH - H) / 2) / dpr}px`;
-    worldMap.geo = { dpr, P, W, H };
-    alignCanvas(stage);
+    // Put the stage on whole device pixels through layout itself (not a transform): Chrome does not
+    // pixel-snap a layer whose transform is animating, so any fractional offset would blur the map.
+    // Chrome places an animated layer on a whole CSS pixel, so pick a CSS-integer position that is also
+    // a whole device pixel (e.g. multiples of 4 CSS px at 125%), as close to centred as possible.
+    const snap = target => {
+      for (let k = 0; k < 64; k++) {
+        for (const v of [Math.round(target) - k, Math.round(target) + k]) {
+          if (Math.abs(v * dpr - Math.round(v * dpr)) < 1e-6) return v;
+        }
+      }
+      return Math.round(target);
+    };
+    stage.style.transform = '';
+    stage.style.left = `${snap(rect.left + Math.floor((boxW - W) / 2) / dpr) - rect.left}px`;
+    stage.style.top = `${snap(rect.top + Math.floor((boxH - H) / 2) / dpr) - rect.top}px`;
+    const bx = rect.left * dpr, by = rect.top * dpr;
+    worldMap.geo = { dpr, P, W, H, bx, by };
     return worldMap.geo;
   }
 
-  function buildLandTile(geo) {
+  function paintWorldMap() {
+    const geo = worldMap.geo;
+    const strip = document.querySelector('.map-strip');
+    if (!geo || !strip) return;
     const m = window.KOMARI_WORLDMAP;
-    const stage = document.querySelector('.map-stage');
-    const ink = resolveColor(stage, 'var(--black)', '#000');
-    const key = `${geo.P}|${ink}`;
-    if (worldMap.tileKey === key) return;
-    const tile = document.createElement('canvas');
-    tile.width = geo.W;
-    tile.height = geo.H;
-    const ctx = tile.getContext('2d');
-    const gap = Math.max(1, Math.round(geo.P * 0.24));
-    const size = geo.P - gap, inset = Math.floor(gap / 2);
+    const { dpr, P, W, H } = geo;
+    const ink = resolveColor(strip, 'var(--black)', '#000');
+    const key = `${dpr}|${P}|${ink}|${worldMap.signature}`;
+    if (key === worldMap.paintKey) return;
+    worldMap.paintKey = key;
+
+    strip.style.width = `${(2 * W) / dpr}px`;
+    strip.style.height = `${H / dpr}px`;
+
+    // Land: two copies, every cell an identical integer square.
+    const canvas = strip.querySelector('.map-canvas');
+    const bw = exactAtLeast(2 * W, dpr), bh = exactAtLeast(H, dpr);
+    canvas.width = bw;
+    canvas.height = bh;
+    canvas.style.width = `${bw / dpr}px`;
+    canvas.style.height = `${bh / dpr}px`;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, bw, bh);
+    const gap = Math.max(1, Math.round(P * 0.24));
+    const size = P - gap, inset = Math.floor(gap / 2);
     ctx.fillStyle = ink;
     ctx.globalAlpha = 0.26;
-    for (const [x, y] of landCells()) ctx.fillRect(x * geo.P + inset, y * geo.P + inset, size, size);
-    worldMap.tile = tile;
-    worldMap.tileKey = key;
-    worldMap.colors = { ink };
-  }
+    for (const [x, y] of landCells()) {
+      ctx.fillRect(x * P + inset, y * P + inset, size, size);
+      ctx.fillRect(x * P + inset + W, y * P + inset, size, size);
+    }
 
-  function drawWorldMap(now) {
-    const geo = worldMap.geo;
-    const canvas = document.querySelector('.map-canvas');
-    if (!geo || !canvas || !worldMap.tile) return;
-    const m = window.KOMARI_WORLDMAP;
-    const { P, W, H } = geo;
-    const off = ((Math.round(worldMap.offset * P) % W) + W) % W;      // whole device pixels
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, 0, W, H);
-    ctx.clip();
-    ctx.drawImage(worldMap.tile, -off, 0);
-    ctx.drawImage(worldMap.tile, W - off, 0);
-
-    // Dashed links, flowing toward the hub.
-    const flow = worldMap.animate ? (now / 1200) * 1.7 * P : 0;
-    ctx.lineWidth = Math.max(1, Math.round(0.35 * P));
-    ctx.lineCap = 'butt';
-    ctx.setLineDash([Math.max(2, Math.round(P)), Math.max(1, Math.round(0.7 * P))]);
-    ctx.strokeStyle = worldMap.colors.ink;
+    // Links: SVG in CSS px, dash flow animated in CSS (its own layer, so the land is never repainted).
+    const u = 1 / dpr;
+    const svg = strip.querySelector('.map-links');
+    svg.setAttribute('viewBox', `0 0 ${(2 * W) * u} ${H * u}`);
+    svg.setAttribute('width', `${(2 * W) * u}`);
+    svg.setAttribute('height', `${H * u}`);
+    const dash = Math.max(2, Math.round(P)) * u, space = Math.max(1, Math.round(0.7 * P)) * u;
+    svg.style.setProperty('--dash-period', `${dash + space}px`);
+    const paths = [];
     for (const link of worldMap.links) {
-      ctx.globalAlpha = link.live ? 1 : 0.35;
-      ctx.lineDashOffset = link.live ? -flow : 0;
-      for (const shift of [-W, 0, W]) {
-        const [ax, ay, cx, cy, bx, by] = link.pts.map((v, i) => (i % 2 === 0 ? v * P - off + shift : v * P));
-        if (Math.max(ax, bx, cx) < -P || Math.min(ax, bx, cx) > W + P) continue;
-        ctx.beginPath();
-        ctx.moveTo(ax, ay);
-        ctx.quadraticCurveTo(cx, cy, bx, by);
-        ctx.stroke();
+      for (const shift of [-W, 0, W, 2 * W]) {
+        const [ax, ay, cx, cy, bx, by] = link.pts.map((v, i) => (v * P + (i % 2 === 0 ? shift : 0)) * u);
+        if (Math.max(ax, bx, cx) < -P * u || Math.min(ax, bx, cx) > 2 * W * u + P * u) continue;
+        paths.push(`<path class="map-link${link.live ? '' : ' is-offline'}" d="M${ax.toFixed(2)} ${ay.toFixed(2)}Q${cx.toFixed(2)} ${cy.toFixed(2)} ${bx.toFixed(2)} ${by.toFixed(2)}" stroke-width="${(Math.max(1, Math.round(0.35 * P)) * u).toFixed(3)}" stroke-dasharray="${dash.toFixed(3)} ${space.toFixed(3)}"></path>`);
       }
     }
-    ctx.restore();
+    svg.innerHTML = paths.join('');
 
-    // Pins: two copies so a pin crossing the edge appears on the other side; whole device pixels.
-    worldMap.pinEls.forEach(({ el, x }) => {
-      const a = ((Math.round(x * P) - off) % W + W) % W;
-      el.style.left = `${a / geo.dpr}px`;
-      el.nextSibling.style.left = `${(a < W / 2 ? a + W : a - W) / geo.dpr}px`;
-    });
+    // Pins: two copies, on whole device pixels within the strip.
+    strip.querySelector('.map-pins').innerHTML = worldMap.pins.map(pin => [0, W].map(shift =>
+      `<span class="${pin.cls}" style="left:${(Math.round(pin.x * P) + shift) / dpr}px;top:${Math.round(pin.y * P) / dpr}px" title="${escapeHtml(pin.tip)}">${pin.label}</span>`
+    ).join('')).join('');
+  }
+
+  // (Re)build the strip animation for the current width/speed/fps, keeping the current phase.
+  function syncMapAnimation(force) {
+    const geo = worldMap.geo;
+    const strip = document.querySelector('.map-strip');
+    if (!geo || !strip || !strip.animate) return;
+    const { seconds, fps } = mapTiming();
+    const key = `${geo.W}|${geo.dpr}|${seconds}|${fps}`;
+    if (!force && key === worldMap.timingKey && worldMap.anim) return;
+    const phase = mapPhase();
+    if (worldMap.anim) worldMap.anim.cancel();
+    worldMap.timingKey = key;
+    const span = geo.W / geo.dpr;
+    // Content moves west -> east: the strip slides right by one world width per revolution.
+    const duration = (seconds || 120) * 1000;
+    worldMap.easing = seconds > 0 && fps > 0 ? `steps(${Math.max(1, Math.round(seconds * fps))}, end)` : 'linear';
+    worldMap.anim = strip.animate(
+      [{ transform: `translate3d(${-span}px, 0, 0)` }, { transform: 'translate3d(0, 0, 0)' }],
+      { duration, iterations: Infinity, easing: worldMap.easing }
+    );
+    worldMap.anim.currentTime = phase * duration;
+    updateMapMotion();
+  }
+
+  // Run while spinning; otherwise pause on a whole device pixel (crisp).
+  function updateMapMotion() {
+    const a = worldMap.anim, geo = worldMap.geo;
+    const strip = document.querySelector('.map-strip');
+    if (!a || !geo || !strip) return;
+    const run = mapTiming().seconds > 0 && !worldMap.hovering && !worldMap.dragging;
+    if (run) {
+      a.effect.updateTiming({ easing: worldMap.easing });
+      strip.classList.remove('is-still');
+      if (a.playState !== 'running') a.play();
+    } else {
+      if (a.playState === 'running') a.pause();
+      snapMapPhase(mapPhase());
+      strip.classList.add('is-still');
+    }
+  }
+
+  function snapMapPhase(phase) {
+    const a = worldMap.anim, geo = worldMap.geo;
+    if (!a || !geo) return;
+    const d = a.effect.getTiming().duration;
+    const px = Math.round((((phase % 1) + 1) % 1) * geo.W);
+    a.effect.updateTiming({ easing: 'linear' });
+    a.currentTime = px / geo.W * d;
   }
 
   function renderWorldMap() {
@@ -1007,7 +1074,7 @@
     box.hidden = !enabled;
     if (header) header.classList.toggle('has-map', enabled);
     if (!enabled) return;
-    startWorldMapMotion();
+    bindWorldMap();
 
     const groups = new Map();
     state.nodes.forEach(node => {
@@ -1041,69 +1108,46 @@
       });
       if (hub && !groups.has(hubCode)) pins.push({ x: hub[0], y: hub[1], cls: 'map-pin map-hub', tip: `${hubCode} · hub`, label: flagEmoji(hubCode) });
       worldMap.links = links;
-      const layer = box.querySelector('.map-pins');
-      layer.innerHTML = pins.map(pin => {
-        const one = `<span class="${pin.cls}" style="top:${(pin.y / m.rows * 100).toFixed(2)}%" title="${escapeHtml(pin.tip)}">${pin.label}</span>`;
-        return one + one;
-      }).join('');
-      const els = layer.children;
-      worldMap.pinEls = pins.map((pin, i) => ({ el: els[i * 2], x: pin.x }));
+      worldMap.pins = pins;
     }
-    worldMap.tileKey = '';                       // colours may have changed with the scheme
-    if (layoutWorldMap()) { buildLandTile(worldMap.geo); drawWorldMap(performance.now()); }
+    if (layoutWorldMap()) {
+      paintWorldMap();
+      syncMapAnimation(false);
+      updateMapMotion();
+    }
   }
 
-  function setMapOffset(offset) {
-    const m = window.KOMARI_WORLDMAP;
-    worldMap.offset = ((offset % m.cols) + m.cols) % m.cols;
-  }
-
-  // Globe-style endless scroll: west -> east at `mapSpinSeconds` per revolution (0 = off), plus drag.
-  function startWorldMapMotion() {
+  function bindWorldMap() {
     const box = document.querySelector('.map-box');
-    const m = window.KOMARI_WORLDMAP;
-    if (!box || !m || worldMap.bound) return;
+    if (!box || worldMap.bound) return;
     worldMap.bound = true;
-    worldMap.pinEls = [];
-    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    worldMap.animate = !reduceMotion;
-
-    const tick = now => {
-      const dt = worldMap.last ? Math.min(0.1, (now - worldMap.last) / 1000) : 0;
-      worldMap.last = now;
-      const map = document.getElementById('stats-map');
-      const visible = map && !map.hidden && map.offsetWidth > 0 && !document.hidden;
-      if (visible) {
-        const seconds = Number(getSetting('mapSpinSeconds', 120)) || 0;
-        if (seconds > 0 && !reduceMotion && !worldMap.dragging && !worldMap.hovering) {
-          // Content moves west -> east, so the visible window slides toward lower longitudes.
-          setMapOffset(worldMap.offset - m.cols / seconds * dt);
-        }
-        if (worldMap.geo && worldMap.tile) drawWorldMap(now);
-      }
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
 
     if ('ResizeObserver' in window) {
-      new ResizeObserver(() => { if (layoutWorldMap()) buildLandTile(worldMap.geo); }).observe(box);
+      new ResizeObserver(() => { if (layoutWorldMap()) { paintWorldMap(); syncMapAnimation(false); } }).observe(box);
     }
 
-    let startX = 0, startOffset = 0;
-    box.addEventListener('pointerenter', () => { worldMap.hovering = true; });
-    box.addEventListener('pointerleave', () => { worldMap.hovering = false; });
+    let startX = 0, startPhase = 0;
+    box.addEventListener('pointerenter', () => { worldMap.hovering = true; updateMapMotion(); });
+    box.addEventListener('pointerleave', () => { worldMap.hovering = false; updateMapMotion(); });
     box.addEventListener('pointerdown', e => {
       worldMap.dragging = true;
       startX = e.clientX;
-      startOffset = worldMap.offset;
+      updateMapMotion();
+      startPhase = mapPhase();
       box.classList.add('is-dragging');
       box.setPointerCapture(e.pointerId);
     });
     box.addEventListener('pointermove', e => {
       if (!worldMap.dragging || !worldMap.geo) return;
-      setMapOffset(startOffset - (e.clientX - startX) * worldMap.geo.dpr / worldMap.geo.P);
+      // Dragging right moves the content right, i.e. forward in the animation.
+      snapMapPhase(startPhase + (e.clientX - startX) * worldMap.geo.dpr / worldMap.geo.W);
     });
-    const endDrag = () => { worldMap.dragging = false; box.classList.remove('is-dragging'); };
+    const endDrag = () => {
+      if (!worldMap.dragging) return;
+      worldMap.dragging = false;
+      box.classList.remove('is-dragging');
+      updateMapMotion();
+    };
     box.addEventListener('pointerup', endDrag);
     box.addEventListener('pointercancel', endDrag);
   }
@@ -1124,9 +1168,55 @@
   }
 
   // ===== Theme menu (visitor override of the admin colour scheme) =====
+  // Swatch = the scheme's paper (left half) | accent (right half) inside a 2px frame in the menu's ink.
+  // Painted on a canvas in device pixels so both halves are always exactly equal at any zoom.
   function swatchHtml(scheme) {
-    const [, paper, accent, ink] = SCHEME_INFO[scheme] || SCHEME_INFO['yellow-light'];
-    return `<span class="theme-swatch" style="--sw-paper:${paper};--sw-accent:${accent};--sw-ink:${ink}" aria-hidden="true"></span>`;
+    const [, paper, accent] = SCHEME_INFO[scheme] || SCHEME_INFO['yellow-light'];
+    return `<span class="theme-swatch" data-paper="${paper}" data-accent="${accent}" aria-hidden="true"><canvas></canvas></span>`;
+  }
+
+  function paintSwatches(root) {
+    const dpr = window.devicePixelRatio || 1;
+    const frame = Math.max(1, Math.round(2 * dpr));
+    // Smallest size >= 18 CSS px that is exact in layout units and leaves an even inner width.
+    let size = Math.round(18 * dpr);
+    for (let k = 0; k < 64; k++, size++) {
+      const units = size / dpr * 64;
+      if (Math.abs(units - Math.round(units)) < 1e-6 && (size - 2 * frame) % 2 === 0) break;
+    }
+    const ink = resolveColor(root, 'var(--black)', '#000');
+    root.querySelectorAll('.theme-swatch').forEach(sw => {
+      const canvas = sw.firstElementChild;
+      canvas.width = canvas.height = size;
+      canvas.style.width = canvas.style.height = `${size / dpr}px`;
+      sw.style.width = sw.style.height = `${size / dpr}px`;
+      const ctx = canvas.getContext('2d');
+      const half = (size - 2 * frame) / 2;
+      ctx.fillStyle = ink;
+      ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = sw.dataset.paper;
+      ctx.fillRect(frame, frame, half, size - 2 * frame);
+      ctx.fillStyle = sw.dataset.accent;
+      ctx.fillRect(frame + half, frame, half, size - 2 * frame);
+      alignByLayout(canvas);
+    });
+  }
+
+  // Put an absolutely positioned element on a point that is both a whole CSS pixel and a whole device
+  // pixel, using layout offsets (no transform). Measured: this is the only placement Chrome paints
+  // 1:1 at fractional zoom (125%, 150%...) inside the fixed theme menu.
+  function alignByLayout(el) {
+    const dpr = window.devicePixelRatio || 1;
+    el.style.left = el.style.top = '0px';
+    const r = el.getBoundingClientRect();
+    const snap = v => {
+      for (let k = 0; k < 64; k++) {
+        for (const x of [Math.round(v) - k, Math.round(v) + k]) if (Math.abs(x * dpr - Math.round(x * dpr)) < 1e-6) return x;
+      }
+      return Math.round(v);
+    };
+    el.style.left = `${snap(r.left) - r.left}px`;
+    el.style.top = `${snap(r.top) - r.top}px`;
   }
 
   function themeItemHtml(choice, label, scheme) {
@@ -1150,6 +1240,7 @@
         <div class="theme-menu-group" role="group" aria-label="Dark"><div class="theme-menu-label">DARK</div>${group('-dark')}</div>
       </div>`;
     document.body.appendChild(menu);
+    menu.addEventListener('scroll', () => menu.querySelectorAll('.theme-swatch canvas').forEach(alignByLayout), { passive: true });
     menu.addEventListener('click', e => {
       const item = e.target.closest('.theme-item');
       if (!item) return;
@@ -1203,6 +1294,7 @@
     syncThemeMenu();
     menu.hidden = false;
     positionThemeMenu();
+    paintSwatches(menu);
     document.querySelector('.btn-theme').setAttribute('aria-expanded', 'true');
     document.querySelector('.btn-theme').classList.add('active');
     (menu.querySelector('.theme-item[aria-checked="true"]') || menu.querySelector('.theme-item')).focus();
@@ -1230,7 +1322,11 @@
     document.addEventListener('pointerdown', e => {
       if (!e.target.closest('#theme-menu, .btn-theme')) closeThemeMenu(false);
     });
-    window.addEventListener('resize', positionThemeMenu);
+    window.addEventListener('resize', () => {
+      positionThemeMenu();
+      const menu = document.getElementById('theme-menu');
+      if (menu && !menu.hidden) paintSwatches(menu);
+    });
     window.addEventListener('scroll', () => closeThemeMenu(false), { passive: true });
   }
 
