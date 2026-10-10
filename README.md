@@ -78,13 +78,13 @@ Fork of [r1cebucket/komari-theme-1999](https://github.com/r1cebucket/komari-them
 
 页头右上角的主题按钮可以让访客自己选择配色，选择保存在浏览器本地，只对自己生效；选「Default」则恢复使用后台设置。后台「配色主题」是所有访客的默认值。
 
-后台「配色主题」可选 16 种：
+后台「配色主题」可选 19 种：
 
 - 浅色·强调色：`yellow-light`、`red-light`、`blue-light`、`green-light`、`purple-light`（白纸黑墨，只换页头强调色）
-- 浅色·完整配色：`solarized-light`、`github-light`、`gruvbox-light`、`catppuccin-light`（Latte）、`tokyonight-light`（Day）
-- 深色：`tokyonight-dark`、`dracula-dark`、`monokai-dark`、`nord-dark`、`gruvbox-dark`、`catppuccin-dark`（Mocha）
+- 浅色·完整配色：`solarized-light`、`github-light`、`gruvbox-light`、`catppuccin-light`（Latte）、`tokyonight-light`（Day）、`chelsea-light`（切尔西：俱乐部蓝 / 金 / 红）
+- 深色：`tokyonight-dark`、`dracula-dark`、`monokai-dark`、`nord-dark`、`gruvbox-dark`、`catppuccin-dark`（Mocha）、`psg-dark`（巴黎圣日耳曼：海军蓝 / 红 / 金）、`samalive-dark`（取自摄影师 samalive 的青橙调色：暗部青、高光橙）
 
-色值取自各配色方案的官方调色板，卡片、三网历史条、图表和提示框都会跟随切换。所有配色都经过 WCAG 对比度核验，正文、次要文字、页头文字和分级数字均 ≥ 4.5:1（个别强调色为此做了极小幅的明度微调）。所选配色会记在浏览器本地，下次打开时不会先闪白屏。
+色值取自各配色方案的官方调色板（球队主题取自俱乐部官方色），卡片、三网历史条、图表和提示框都会跟随切换。所有配色都经过 WCAG 对比度核验，正文、次要文字、页头文字和分级数字均 ≥ 4.5:1（个别强调色为此做了极小幅的明度微调）。所选配色会记在浏览器本地，下次打开时不会先闪白屏。
 
 ### 节点详情
 
@@ -152,7 +152,7 @@ Settings are declared in `komari-theme.json` under `configuration` (`type: manag
 
 | Group | Key | Type | Default |
 | --- | --- | --- | --- |
-| Appearance | `colorScheme` | select: yellow-light, red-light, blue-light, green-light, purple-light, tokyonight-dark, dracula-dark, monokai-dark, nord-dark, gruvbox-dark, catppuccin-dark | `yellow-light` |
+| Appearance | `colorScheme` | select: yellow-light, red-light, blue-light, green-light, purple-light, solarized-light, github-light, gruvbox-light, catppuccin-light, tokyonight-light, chelsea-light, tokyonight-dark, dracula-dark, monokai-dark, nord-dark, gruvbox-dark, catppuccin-dark, psg-dark, samalive-dark | `yellow-light` |
 | Appearance | `pageBackground` | select: none, dots, grid, cross, diagonal | `none` |
 | Appearance | `cardStyle` | select: thick, thin, double | `thick` |
 | Appearance | `showUptime` | switch | on |

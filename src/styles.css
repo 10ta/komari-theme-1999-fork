@@ -154,7 +154,8 @@
 [data-scheme="github-light"],
 [data-scheme="gruvbox-light"],
 [data-scheme="catppuccin-light"],
-[data-scheme="tokyonight-light"] {
+[data-scheme="tokyonight-light"],
+[data-scheme="chelsea-light"] {
   --black: var(--ink);
   --white: var(--paper);
   --card-bg: var(--paper);
@@ -235,9 +236,18 @@
   --accent-cyan: #007197; --accent-blue: #2e7de9; --accent-purple: #7847bd; --accent-pink: #9854f1;
 }
 
-/* Deep accents (Catppuccin mauve, Tokyo Night Day blue) carry light header text, like the dark schemes. */
+/* Chelsea: club blue / white / gold / red (#034694, #DBA111, #EE242C, #6A7AB5). */
+[data-scheme="chelsea-light"] {
+  --ink: #0a1f4a; --paper: #ffffff; --bg: #f1f2f4; --text-muted: #4b5876; --sig-text-mix: 65%;
+  --accent: #034694; --on-accent: #ffffff;
+  --accent-red: #EE242C; --accent-orange: #e8711c; --accent-yellow: #DBA111; --accent-green: #2e9d4f;
+  --accent-cyan: #1f8fb0; --accent-blue: #034694; --accent-purple: #6A7AB5; --accent-pink: #d14d86;
+}
+
+/* Deep accents (Catppuccin mauve, Tokyo Night Day blue, Chelsea blue) carry light header text, like the dark schemes. */
 [data-scheme="catppuccin-light"] .header,
-[data-scheme="tokyonight-light"] .header {
+[data-scheme="tokyonight-light"] .header,
+[data-scheme="chelsea-light"] .header {
   --black: var(--on-accent);
   --text: var(--on-accent);
   --white: var(--ink);
@@ -293,6 +303,24 @@
   --accent-cyan: #94e2d5; --accent-blue: #89b4fa; --accent-purple: #cba6f7; --accent-pink: #f5c2e7;
 }
 
+/* PSG: club navy / red / gold (#004170, #DA291C, #CEAB5D). The signal red is lifted (#f26a5e) so
+   red numbers stay >= 4.5:1 on the navy paper; the header keeps the club red. */
+[data-scheme="psg-dark"] {
+  --ink: #ffffff; --paper: #004170; --bg: #00315a; --text-muted: #a7bdd2; --deep: #001a33;
+  --accent: #DA291C; --on-accent: #ffffff;
+  --accent-red: #f26a5e; --accent-orange: #ef8a3c; --accent-yellow: #CEAB5D; --accent-green: #5fbf7a;
+  --accent-cyan: #5cc4e0; --accent-blue: #6aa6e8; --accent-purple: #b49be8; --accent-pink: #f08aa6;
+}
+
+/* samalive: teal-and-orange grading taken from the photographer's work - shadows and sky pushed to
+   teal (#233844 / #537887 / #b2c7cf), only sunlit skin, knitwear and leaves stay warm orange/peach. */
+[data-scheme="samalive-dark"] {
+  --ink: #dce8ec; --paper: #1f333d; --bg: #16262e; --text-muted: #93adb8; --deep: #0d181d;
+  --accent: #e0913a; --on-accent: #16262e;
+  --accent-red: #e06a4f; --accent-orange: #e0913a; --accent-yellow: #e8c27a; --accent-green: #8fbf9a;
+  --accent-cyan: #7fb8c9; --accent-blue: #7aa3c4; --accent-purple: #a99bc9; --accent-pink: #eab09a;
+}
+
 /* Dark schemes: hard shadows take a dim tint of the accent so cards keep their offset depth. */
 [data-scheme$="-dark"] {
   --shadow: color-mix(in srgb, var(--accent) 38%, var(--bg));
@@ -317,6 +345,12 @@
   --white: var(--ink);
   --shadow: var(--on-accent);
   color: var(--on-accent);
+}
+
+/* PSG: white ink on a red header, so the header "paper" is the club navy instead of white-on-white. */
+[data-scheme="psg-dark"] .header {
+  --white: var(--paper);
+  --shadow: var(--deep);
 }
 
 * {
@@ -820,8 +854,15 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .footer-powered strong {
-  color: var(--accent);
+  color: var(--footer-link, var(--accent));
 }
+
+/* Footer link on the footer band: deep accents on an ink footer fall below 4.5:1, so these schemes
+   pick another hue (Chelsea gold, PSG lifted red) or a light tint. */
+[data-scheme="catppuccin-light"] { --footer-link: color-mix(in srgb, var(--accent) 20%, var(--paper)); }
+[data-scheme="tokyonight-light"] { --footer-link: var(--paper); }
+[data-scheme="chelsea-light"] { --footer-link: var(--accent-yellow); }
+[data-scheme="psg-dark"] { --footer-link: var(--accent-red); }
 
 .footer-signature {
   display: inline-flex;

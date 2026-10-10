@@ -54,8 +54,9 @@
 
   const COLOR_SCHEMES = [
     'yellow-light', 'red-light', 'blue-light', 'green-light', 'purple-light',
-    'solarized-light', 'github-light', 'gruvbox-light', 'catppuccin-light', 'tokyonight-light',
-    'tokyonight-dark', 'dracula-dark', 'monokai-dark', 'nord-dark', 'gruvbox-dark', 'catppuccin-dark'
+    'solarized-light', 'github-light', 'gruvbox-light', 'catppuccin-light', 'tokyonight-light', 'chelsea-light',
+    'tokyonight-dark', 'dracula-dark', 'monokai-dark', 'nord-dark', 'gruvbox-dark', 'catppuccin-dark',
+    'psg-dark', 'samalive-dark'
   ];
   const SCHEME_STORAGE_KEY = 'komari1999.colorScheme';   // last applied (anti-flash on load)
   const USER_SCHEME_KEY = 'komari1999.userScheme';       // visitor's own choice, overrides the admin default
@@ -72,12 +73,15 @@
     'gruvbox-light': ['Gruvbox', '#fbf1c7', '#d79921', '#282828'],
     'catppuccin-light': ['Catppuccin Latte', '#eff1f5', '#8839ef', '#4c4f69'],
     'tokyonight-light': ['Tokyo Night Day', '#e9e9ed', '#2564ba', '#3760bf'],
+    'chelsea-light': ['Chelsea', '#ffffff', '#034694', '#0a1f4a'],
     'tokyonight-dark': ['Tokyo Night', '#24283b', '#7aa2f7', '#c0caf5'],
     'dracula-dark': ['Dracula', '#282a36', '#ff79c6', '#f8f8f2'],
     'monokai-dark': ['Monokai', '#272822', '#e6db74', '#f8f8f2'],
     'nord-dark': ['Nord', '#3b4252', '#88c0d0', '#eceff4'],
     'gruvbox-dark': ['Gruvbox', '#282828', '#fe8019', '#ebdbb2'],
     'catppuccin-dark': ['Catppuccin Mocha', '#1e1e2e', '#cba6f7', '#cdd6f4'],
+    'psg-dark': ['PSG', '#004170', '#DA291C', '#ffffff'],
+    'samalive-dark': ['samalive', '#1f333d', '#e0913a', '#dce8ec'],
   };
 
   function readStorage(key) {
