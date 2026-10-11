@@ -2369,9 +2369,9 @@
     setChartLoading('.modal-latency-section', true);
 
     try {
-      const response = await rpcCall('common:getRecords', { uuid, type: 'ping', hours: state.modalTimeScale });
+      const groups = await fetchLatencyGroups(uuid, state.modalTimeScale);
       if (requestId !== state.latencyRequestId || state.activeNodeUuid !== uuid) return;
-      renderLatencyChart(response?.records || [], response?.tasks || []);
+      renderLatencyChart(groups);
     } catch (error) {
       if (requestId === state.latencyRequestId) console.warn('Error refreshing latency chart:', error);
     } finally {
@@ -2564,50 +2564,114 @@
 
   }
 
-  function computeTaskStats(pingRecords, pingTasks) {
-    const nameById = {};
-    (pingTasks || []).forEach(task => { nameById[task.id] = task.name; });
+  // Latency data for the modal, as ordered task groups: { id, name, points: [[time, ms|null, loss%, weight]] }.
+  // Prefers the metrics rollups (every probe counted, same source and maths as the card's carrier
+  // rows); falls back to common:getRecords, which only keeps one sample per minute.
+  async function fetchLatencyGroups(uuid, hours) {
+    try {
+      const target = hours * 3600 / 300;
+      const step = Math.max(60, STANDARD_STEPS_S.filter(v => v <= target).pop() || 60);
+      const [tasks, result] = await Promise.all([
+        rpcCall('public:getPublicPingTasks', {}).catch(() => []),
+        rpcCall('public:queryMetrics', {
+          metric_keys: ['ping.latency_ms', 'ping.loss'],
+          entity_ids: [uuid],
+          hours,
+          max_points: Math.ceil(hours * 3600 / step),
+          aggregation: 'avg'
+        })
+      ]);
+      const groups = latencyGroupsFromMetrics(result && result.series, Array.isArray(tasks) ? tasks : [], uuid);
+      if (groups.length) return groups;
+    } catch (e) {
+      console.warn('[Komari Theme] Ping metrics unavailable, using sampled records:', e);
+    }
+    const response = await rpcCall('common:getRecords', { uuid, type: 'ping', hours });
+    return latencyGroupsFromRecords(response?.records || [], response?.tasks || []);
+  }
 
-    const grouped = new Map();
+  function orderGroups(byId, tasks) {
+    const order = [];
+    (tasks || []).forEach(task => { const id = String(task.id); if (byId.has(id) && !order.includes(id)) order.push(id); });
+    byId.forEach((_, id) => { if (!order.includes(id)) order.push(id); });
+    return order.map(id => byId.get(id));
+  }
+
+  // Bucket "avg" of ping.latency_ms counts lost probes as -1 and ping.loss is a 0/1 indicator, so
+  // latency of the answered probes = (avg + loss) / (1 - loss) (same as buildCarrierStats).
+  function latencyGroupsFromMetrics(seriesList, tasks, uuid) {
+    const nameById = new Map((tasks || []).map(t => [String(t.id), t.name]));
+    const buckets = new Map();
+    (seriesList || []).forEach(series => {
+      if (series.entity_id && series.entity_id !== uuid) return;
+      const isLoss = series.metric_key === 'ping.loss';
+      if (!isLoss && series.metric_key !== 'ping.latency_ms') return;
+      const id = String(seriesTaskId(series));
+      if (id === 'NaN') return;
+      if (!buckets.has(id)) buckets.set(id, new Map());
+      const byTime = buckets.get(id);
+      (series.points || []).forEach(point => {
+        const t = Date.parse(point.time);
+        if (point.value == null || !Number.isFinite(t)) return;
+        if (!byTime.has(t)) byTime.set(t, {});
+        const b = byTime.get(t);
+        const n = point.count > 0 ? point.count : 1;
+        if (isLoss) { b.loss = point.value; b.ln = n; } else { b.avg = point.value; b.an = n; }
+      });
+    });
+    const byId = new Map();
+    buckets.forEach((byTime, id) => {
+      const points = Array.from(byTime.entries()).sort((a, b) => a[0] - b[0]).map(([t, b]) => {
+        const loss = b.loss != null ? Math.min(1, Math.max(0, b.loss)) : (b.avg != null && b.avg < 0 ? 1 : 0);
+        let ms = null;
+        if (b.avg != null && loss < 1) {
+          const v = b.loss != null ? (b.avg + loss) / (1 - loss) : b.avg;
+          ms = v >= 0 ? v : null;
+        }
+        return [t, ms, loss * 100, b.ln || b.an || 1];
+      });
+      byId.set(id, { id, name: nameById.get(id) || `Task ${id}`, points });
+    });
+    return orderGroups(byId, tasks);
+  }
+
+  function latencyGroupsFromRecords(pingRecords, pingTasks) {
+    const nameById = new Map((pingTasks || []).map(t => [String(t.id), t.name]));
+    const byId = new Map();
     (pingRecords || []).forEach(record => {
-      const taskId = record.task_id ?? 'Default';
+      const id = String(record.task_id ?? 'Default');
       const timestamp = parseRecordTime(record.time ?? record.updated_at);
       if (timestamp == null) return;
-      if (!grouped.has(taskId)) grouped.set(taskId, []);
-      grouped.get(taskId).push({ timestamp, value: record.value });
+      if (!byId.has(id)) byId.set(id, { id, name: nameById.get(id) || (id === 'Default' ? 'Ping' : `Task ${id}`), points: [] });
+      const lost = typeof record.value !== 'number' || record.value < 0;
+      byId.get(id).points.push([timestamp, lost ? null : record.value, lost ? 100 : 0, 1]);
     });
+    byId.forEach(g => g.points.sort((a, b) => a[0] - b[0]));
+    return orderGroups(byId, pingTasks);
+  }
 
-    const order = [];
-    (pingTasks || []).forEach(task => { if (grouped.has(task.id) && !order.includes(task.id)) order.push(task.id); });
-    grouped.forEach((_, id) => { if (!order.includes(id)) order.push(id); });
-
-    return order.map(taskId => {
-      const recs = grouped.get(taskId).slice().sort((a, b) => a.timestamp - b.timestamp);
-      const total = recs.length;
-      const lossCount = recs.filter(r => typeof r.value === 'number' && r.value < 0).length;
-      const loss = total > 0 ? (lossCount / total) * 100 : 0;
-      // Last successful probe; a lost final sample should not blank the headline number.
-      const latestValid = recs.slice().reverse().find(r => typeof r.value === 'number' && r.value >= 0);
-      const latest = latestValid ? latestValid.value : null;
-
-      const validValues = recs
-        .map(r => r.value)
-        .filter(v => typeof v === 'number' && v >= 0);
-
-      const stats = validValues.length ? {
-        min: Math.min(...validValues),
-        max: Math.max(...validValues),
-        avg: validValues.reduce((sum, v) => sum + v, 0) / validValues.length,
-        p50: percentile(validValues, 50),
-        p99: percentile(validValues, 99),
-      } : { min: null, max: null, avg: null, p50: null, p99: null };
-
+  // Headline = probe-weighted average latency and loss over the window (what the card shows for
+  // the same window); LAST and the spread figures come from the plotted points.
+  function computeTaskStats(groups) {
+    return groups.map(group => {
+      let lossW = 0, total = 0, latW = 0, valid = 0;
+      group.points.forEach(([, ms, lossPct, w]) => {
+        lossW += lossPct * w; total += w;
+        const answered = w * (1 - lossPct / 100);
+        if (ms != null && answered > 0) { latW += ms * answered; valid += answered; }
+      });
+      const values = group.points.map(p => p[1]).filter(v => v != null);
+      const last = group.points.slice().reverse().find(p => p[1] != null);
       return {
-        id: taskId,
-        name: nameById[taskId] || (taskId === 'Default' ? 'Ping' : `Task ${taskId}`),
-        latest,
-        loss,
-        ...stats,
+        id: group.id,
+        name: group.name,
+        avg: valid ? latW / valid : null,
+        loss: total ? lossW / total : 0,
+        latest: last ? last[1] : null,
+        min: values.length ? Math.min(...values) : null,
+        max: values.length ? Math.max(...values) : null,
+        p50: percentile(values, 50),
+        p99: percentile(values, 99),
         total
       };
     });
@@ -2629,10 +2693,10 @@
       const color = colorByTaskId.get(String(task.id)) || pingColor(index);
       const lossText = `${task.loss.toFixed(1)}% LOSS`;
       const lossClass = task.loss > 0 ? 'has-loss' : '';
-      const latestText = formatPing(task.latest);
+      const latestText = formatPing(task.avg);
       const detailRows = [];
+      if (task.latest != null) detailRows.push(['LAST', `${task.latest.toFixed(0)} ms`]);
       if (task.min != null) detailRows.push(['MIN', `${task.min.toFixed(0)} ms`]);
-      if (task.avg != null) detailRows.push(['AVG', `${task.avg.toFixed(0)} ms`]);
       if (task.max != null) detailRows.push(['MAX', `${task.max.toFixed(0)} ms`]);
       if (task.p50 != null) detailRows.push(['P50', `${task.p50.toFixed(0)} ms`]);
       if (task.p99 != null) detailRows.push(['P99', `${task.p99.toFixed(0)} ms`]);
@@ -2698,50 +2762,25 @@
     });
   }
 
-  function renderLatencyChart(pingRecords, pingTasks) {
+  function renderLatencyChart(groups) {
     disposeChart('ping');
     if (typeof echarts === 'undefined') return;
 
-    const stats = computeTaskStats(pingRecords, pingTasks);
-    const colorByTaskId = new Map(stats.map((task, index) => [
-      String(task.id),
-      pingColor(index)
-    ]));
+    const stats = computeTaskStats(groups);
+    const colorByTaskId = new Map(stats.map((task, index) => [String(task.id), pingColor(index)]));
     renderLatencyTasks(stats, colorByTaskId);
 
-    const nameById = {};
-    (pingTasks || []).forEach(task => { nameById[task.id] = task.name; });
-    const pingGroups = {};
-    (pingRecords || []).forEach(record => {
-      const taskId = record.task_id || 'Default';
-      const timestamp = parseRecordTime(record.time ?? record.updated_at);
-      if (timestamp == null) return;
-      if (!pingGroups[taskId]) {
-        pingGroups[taskId] = {
-          name: nameById[record.task_id] || (taskId === 'Default' ? 'Ping' : `Task ${taskId}`),
-          data: []
-        };
-      }
-      const value = (record.value == null || record.value < 0) ? null : record.value;
-      pingGroups[taskId].data.push([timestamp, value]);
-    });
-
-    const orderedTaskIds = stats
-      .map(task => String(task.id))
-      .filter(taskId => pingGroups[taskId]);
-    Object.keys(pingGroups).forEach(taskId => {
-      if (!orderedTaskIds.includes(taskId)) orderedTaskIds.push(taskId);
-    });
-    const lineSeries = orderedTaskIds.map((taskId, index) => createSeries(
-      pingGroups[taskId].name,
-      colorByTaskId.get(taskId) || pingColor(index),
-      pingGroups[taskId].data.sort((a, b) => a[0] - b[0]),
+    const lineSeries = groups.map((group, index) => createSeries(
+      group.name,
+      colorByTaskId.get(group.id) || pingColor(index),
+      group.points.map(p => [p[0], p[1]]),
       0.08,
       true
     ));
-    // Lost probes: short ticks on the x axis in the task colour (index stays aligned with the task cards).
-    const lossSeries = orderedTaskIds.map((taskId, index) => ({
-      name: `${pingGroups[taskId].name} loss`,
+    // Loss: short ticks on the x axis in the task colour wherever a bucket lost more than 1% (the
+    // same threshold as the card strip's loss band); index stays aligned with the task cards.
+    const lossSeries = groups.map((group, index) => ({
+      name: `${group.name} loss`,
       type: 'scatter',
       silent: true,
       symbol: 'rect',
@@ -2749,7 +2788,7 @@
       symbolOffset: [0, -4],
       itemStyle: { color: lineSeries[index].itemStyle.color },
       tooltip: { show: false },
-      data: pingGroups[taskId].data.filter(point => point[1] == null).map(point => [point[0], 0])
+      data: group.points.filter(p => p[1] == null || p[2] > 1).map(p => [p[0], 0])
     })).filter(series => series.data.length);
     const pingSeries = lineSeries.concat(lossSeries);
     if (pingSeries.length) {
