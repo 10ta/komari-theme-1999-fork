@@ -3,7 +3,7 @@
 
   const state = {
     nodes: new Map(),
-    viewMode: localStorage.getItem('nodeViewMode') || 'grid',
+    viewMode: (() => { try { return localStorage.getItem('nodeViewMode') || 'grid'; } catch (e) { return 'grid'; } })(),
     settings: {},
     pollTimer: null,
     pollInterval: 3000,
@@ -19,7 +19,13 @@
     isLoggedIn: false,
     authForced: false,
     authNeedsOtp: false,
-    carrier: { byNode: new Map(), timer: null },
+    carrier: { byNode: new Map(), timer: null, html: new Map(), lastAt: 0 },
+    els: new Map(),          // uuid -> rendered card / row
+    renderKey: null,         // structure the DOM was built for (null = rebuild on next poll)
+    clients: null,           // common:getNodes cache (static node info)
+    clientsAt: 0,
+    fetching: false,
+    live: false,             // polling wanted (false on a private site before login)
     resetRulesRaw: null,
     resetRules: new Map()
   };
@@ -68,19 +74,19 @@
     'blue-light': ['Blue', '#ffffff', '#0d6eff', '#000000'],
     'green-light': ['Green', '#ffffff', '#00CC66', '#000000'],
     'purple-light': ['Purple', '#ffffff', '#9B5DE5', '#000000'],
-    'solarized-light': ['Solarized', '#fdf6e3', '#bc9417', '#073642'],
+    'solarized-light': ['Solarized', '#fdf6e3', '#e3bd4f', '#073642'],
     'github-light': ['GitHub', '#ffffff', '#54aeff', '#1f2328'],
     'gruvbox-light': ['Gruvbox', '#fbf1c7', '#d79921', '#282828'],
-    'catppuccin-light': ['Catppuccin Latte', '#eff1f5', '#8839ef', '#4c4f69'],
-    'tokyonight-light': ['Tokyo Night Day', '#e9e9ed', '#2564ba', '#3760bf'],
+    'catppuccin-light': ['Catppuccin Latte', '#eff1f5', '#bfa0f5', '#4c4f69'],
+    'tokyonight-light': ['Tokyo Night Day', '#e9e9ed', '#8fb0f3', '#343b58'],
     'chelsea-light': ['Chelsea', '#ffffff', '#034694', '#0a1f4a'],
     'tokyonight-dark': ['Tokyo Night', '#24283b', '#7aa2f7', '#c0caf5'],
-    'dracula-dark': ['Dracula', '#282a36', '#ff79c6', '#f8f8f2'],
-    'monokai-dark': ['Monokai', '#272822', '#e6db74', '#f8f8f2'],
+    'dracula-dark': ['Dracula', '#282a36', '#ff79c6', '#dedfd8'],
+    'monokai-dark': ['Monokai', '#272822', '#e6db74', '#dcdccf'],
     'nord-dark': ['Nord', '#3b4252', '#88c0d0', '#eceff4'],
     'gruvbox-dark': ['Gruvbox', '#282828', '#fe8019', '#ebdbb2'],
     'catppuccin-dark': ['Catppuccin Mocha', '#1e1e2e', '#cba6f7', '#cdd6f4'],
-    'psg-dark': ['PSG', '#004170', '#DA291C', '#ffffff'],
+    'psg-dark': ['PSG', '#0e2a4a', '#DA291C', '#e8edf3'],
     'samalive-dark': ['samalive', '#1f333d', '#e0913a', '#dce8ec'],
   };
 
@@ -463,6 +469,7 @@
     if (!settingOn('carrierPingEnabled') || state.nodes.size === 0) {
       if (state.carrier.byNode.size) {
         state.carrier.byNode = new Map();
+        state.carrier.html.clear();
         refreshAllExtras();
       }
       return;
@@ -482,16 +489,24 @@
         })
       ]);
       state.carrier.byNode = buildCarrierStats(result && result.series, Array.isArray(tasks) ? tasks : [], hours);
+      state.carrier.html.clear();
+      state.carrier.lastAt = Date.now();
       refreshAllExtras();
     } catch (e) {
       console.warn('[Komari Theme] Carrier latency unavailable:', e);
     }
   }
 
-  function startCarrierPolling() {
-    if (state.carrier.timer) clearInterval(state.carrier.timer);
-    fetchCarrierPing();
+  // `resume`: coming back to a hidden tab only refetches when the last result is stale.
+  function startCarrierPolling(resume = false) {
+    stopCarrierPolling();
+    if (!resume || Date.now() - state.carrier.lastAt >= CARRIER_REFRESH_MS) fetchCarrierPing();
     state.carrier.timer = setInterval(fetchCarrierPing, CARRIER_REFRESH_MS);
+  }
+
+  function stopCarrierPolling() {
+    if (state.carrier.timer) clearInterval(state.carrier.timer);
+    state.carrier.timer = null;
   }
 
   function latencyTone(ms) {
@@ -507,8 +522,18 @@
     return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   }
 
+  // Built once per carrier refresh (every poll re-renders extras, but this part changes once a minute).
   function buildCarrierHtml(uuid) {
     if (!settingOn('carrierPingEnabled') || state.carrier.byNode.size === 0) return '';
+    let html = state.carrier.html.get(uuid);
+    if (html == null) {
+      html = carrierHtml(uuid);
+      state.carrier.html.set(uuid, html);
+    }
+    return html;
+  }
+
+  function carrierHtml(uuid) {
     const found = state.carrier.byNode.get(uuid) || [];
     const carriers = CARRIERS.map(c => found.find(f => f.key === c.key) ||
       { ...c, taskNames: ['No Ping task for this node'], latency: null, loss: null, slots: Array(CARRIER_BAR_COUNT).fill(null) });
@@ -667,6 +692,13 @@
     return `rgb(${r}, ${g}, ${b})`;
   }
 
+  // Every strip sits on card paper, so its resolved colours only change with the scheme (cleared in applySettings).
+  const stripColors = new Map();
+  function stripColor(context, value, fallback) {
+    if (!stripColors.has(value)) stripColors.set(value, resolveColor(context, value, fallback));
+    return stripColors.get(value);
+  }
+
   function snapStrip(track, width) {
     const strip = track.querySelector('.x-strip');
     if (!strip || !(width > 0)) return;
@@ -694,8 +726,8 @@
 
     const css = getComputedStyle(strip);
     const tone = name => css.getPropertyValue(name).trim();
-    const frame = resolveColor(strip, 'var(--black)', '#000');    // outer frame = ink, like other boxes
-    const ink = resolveColor(strip, 'var(--strip-line)', frame);  // thin inner lines, one step softer
+    const frame = stripColor(strip, 'var(--black)', '#000');    // outer frame = ink, like other boxes
+    const ink = stripColor(strip, 'var(--strip-line)', frame);  // thin inner lines, one step softer
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = frame;
     ctx.fillRect(0, 0, W, H);
@@ -800,7 +832,7 @@
   (function watchPixelRatio() {
     if (!window.matchMedia) return;
     const mq = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
-    const onChange = () => { snapAllStrips(); renderPagePattern(); watchPixelRatio(); };
+    const onChange = () => { snapAllStrips(); renderPagePattern(); renderWorldMap(true); watchPixelRatio(); };
     if (mq.addEventListener) mq.addEventListener('change', onChange, { once: true });
   })();
 
@@ -819,7 +851,7 @@
   function refreshAllExtras() {
     if (!elements.container) return;
     state.nodes.forEach((node, uuid) => {
-      const el = elements.container.querySelector(`[data-uuid="${uuid}"]`);
+      const el = state.els.get(uuid);
       if (el) renderExtras(el, node);
     });
   }
@@ -1069,7 +1101,9 @@
     a.currentTime = px / geo.W * d;
   }
 
-  function renderWorldMap() {
+  // Polls call this every few seconds; the box is only re-measured when the pins changed or `force`
+  // (scheme / settings / pixel ratio). Size changes are handled by the ResizeObserver in bindWorldMap.
+  function renderWorldMap(force = false) {
     const box = document.getElementById('stats-map');
     const header = document.querySelector('.header');
     const m = window.KOMARI_WORLDMAP;
@@ -1093,7 +1127,9 @@
     const hubCode = String(getSetting('mapHub', 'CN')).trim().toUpperCase();
     const hub = m.anchors[hubCode] ? mapPoint(...m.anchors[hubCode]) : null;
     const signature = JSON.stringify([hubCode, Array.from(groups.values())]);
-    if (signature !== worldMap.signature) {
+    const changed = signature !== worldMap.signature;
+    if (!changed && !force && worldMap.geo) return;
+    if (changed) {
       worldMap.signature = signature;
       const links = [], pins = [];
       groups.forEach(group => {
@@ -1354,8 +1390,10 @@
       el.style.display = showUptime ? '' : 'none';
     });
 
+    stripColors.clear();
+    state.carrier.html.clear();
     refreshAllExtras();
-    renderWorldMap();
+    renderWorldMap(true);
     renderPagePattern();
     requestAnimationFrame(snapAllStrips);
   }
@@ -1513,6 +1551,7 @@
       elements.authModal.classList.remove('active');
       elements.authModal.setAttribute('aria-hidden', 'true');
       document.body.style.overflow = '';
+      state.clients = null;   // logged-in users may see hidden nodes
       await fetchNodesAndStatus();
       startPolling();
       startCarrierPolling();
@@ -1527,12 +1566,26 @@
     }
   }
 
+  // Static node info (name, region, billing...) changes rarely: refetched every NODES_REFRESH_MS, or at
+  // once when the status feed mentions a node we do not know. Live status is fetched every poll.
+  const NODES_REFRESH_MS = 30000;
+
   async function fetchNodesAndStatus() {
+    if (state.fetching) return;   // a slow response must not stack up overlapping polls
+    state.fetching = true;
     try {
-      const [clients, statuses] = await Promise.all([
-        rpcCall('common:getNodes', {}),
+      const stale = !state.clients || Date.now() - state.clientsAt > NODES_REFRESH_MS;
+      let [clients, statuses] = await Promise.all([
+        stale ? rpcCall('common:getNodes', {}) : state.clients,
         rpcCall('common:getNodesLatestStatus', {})
       ]);
+      if (!stale && clients && statuses && Object.keys(statuses).some(uuid => !(uuid in clients))) {
+        clients = await rpcCall('common:getNodes', {});
+      }
+      if (clients !== state.clients) {
+        state.clients = clients;
+        state.clientsAt = Date.now();
+      }
 
       if (clients && typeof clients === 'object') {
         Object.keys(clients).forEach(uuid => {
@@ -1597,7 +1650,7 @@
         }
       });
 
-      if (state.isInitialRender) {
+      if (state.isInitialRender || structureKey() !== state.renderKey) {
         render();
         state.isInitialRender = false;
       } else {
@@ -1613,6 +1666,8 @@
     } catch (e) {
       console.error('[Komari Theme] Error fetching data:', e);
       renderError();
+    } finally {
+      state.fetching = false;
     }
   }
 
@@ -1730,9 +1785,7 @@
     return card;
   }
 
-  function updateNodeCard(node) {
-    const existingCard = document.querySelector(`[data-uuid="${node.uuid}"]`);
-    if (!existingCard) return;
+  function updateNodeCard(existingCard, node) {
 
     const cpu = node.cpu || 0;
     const ramPct = node.ram_total ? getPercentage(node.ram, node.ram_total) : 0;
@@ -2007,7 +2060,21 @@
     renderExtras(row, node);
   }
 
+  // What the cards are built from (order, names, flags, OS/CPU lines, view). When it changes - a node
+  // added, removed, renamed or re-weighted - the list is rebuilt; otherwise cards update in place.
+  function sortedNodes() {
+    return Array.from(state.nodes.values()).sort((a, b) => a.weight - b.weight);
+  }
+
+  function structureKey() {
+    return state.viewMode + '\u0002' + sortedNodes()
+      .map(n => [n.uuid, n.name, n.region, n.os, n.cpu_name].join('\u0001')).join('\u0002');
+  }
+
   function render() {
+    if (stripObserver) elements.container.querySelectorAll('.x-track').forEach(track => stripObserver.unobserve(track));
+    state.els = new Map();
+    state.renderKey = structureKey();
     if (state.nodes.size === 0) {
       elements.container.innerHTML = `
         <div class="empty-state">
@@ -2021,23 +2088,23 @@
     elements.container.innerHTML = '';
     elements.container.className = `nodes-container${state.viewMode === 'list' ? ' list-view' : ''}`;
 
-    const sortedNodes = Array.from(state.nodes.values()).sort((a, b) => a.weight - b.weight);
-
-    sortedNodes.forEach(node => {
+    const fragment = document.createDocumentFragment();
+    sortedNodes().forEach(node => {
       const item = state.viewMode === 'list' ? createNodeListItem(node) : createNodeCard(node);
-      elements.container.appendChild(item);
+      state.els.set(node.uuid, item);
+      fragment.appendChild(item);
     });
+    elements.container.appendChild(fragment);
   }
 
   function updateAllCards() {
-    if (state.nodes.size === 0) return;
     state.nodes.forEach((node, uuid) => {
-      const el = document.querySelector(`[data-uuid="${uuid}"]`);
+      const el = state.els.get(uuid);
       if (!el) return;
       if (el.classList.contains('node-row')) {
         updateNodeListItem(el, node);
       } else {
-        updateNodeCard(node);
+        updateNodeCard(el, node);
       }
     });
   }
@@ -2064,7 +2131,7 @@
     });
 
     const nodeCount = state.nodes.size;
-    const avgCpu = nodeCount > 0 ? (totalCpu / nodeCount) : 0;
+    const avgCpu = onlineCount > 0 ? (totalCpu / onlineCount) : 0;
     const avgRam = ramCount > 0 ? (totalRam / ramCount) : 0;
     const netInText = (totalNetIn > 0 ? formatNetworkSpeed(totalNetIn) : '0 B/s').replace(' ', '\n');
     const netOutText = (totalNetOut > 0 ? formatNetworkSpeed(totalNetOut) : '0 B/s').replace(' ', '\n');
@@ -2099,6 +2166,8 @@
   }
 
   function renderError() {
+    state.renderKey = null;   // rebuild the cards as soon as the API answers again
+    state.els = new Map();
     elements.container.innerHTML = `
       <div class="empty-state">
         <h2>CONNECTION ERROR</h2>
@@ -2109,7 +2178,7 @@
 
   function setViewMode(mode) {
     state.viewMode = mode;
-    localStorage.setItem('nodeViewMode', mode);
+    writeStorage('nodeViewMode', mode);
     document.querySelectorAll('.btn-view[data-view]').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.view === mode);
     });
@@ -2122,7 +2191,8 @@
   async function openNodeModal(uuid) {
     state.modalCloseId++;
     state.activeNodeUuid = uuid;
-    state.modalTimeScale = 1; // Reset to 1h on open
+    state.modalTimeScale = 1; // Reset both selectors to 1h on open (the buttons are rendered with 1H active)
+    state.modalLoadTimeScale = 1;
     const node = state.nodes.get(uuid);
     if (!node) return;
 
@@ -2131,32 +2201,34 @@
     const memoryPercent = getPercentage(node.ram || 0, node.ram_total || 0);
     const swapPercent = getPercentage(node.swap || 0, node.swap_total || 0);
     const diskPercent = getPercentage(node.disk || 0, node.disk_total || 0);
+    // Agent-reported strings (OS, CPU, kernel...) are untrusted: always escape before use in HTML.
+    const t = value => escapeHtml(value || '-');
 
     elements.modalContent.innerHTML = `
       <div class="modal-node-header">
         <div class="modal-node-title">
-          <h2 class="modal-node-name">${node.name}</h2>
+          <h2 class="modal-node-name">${escapeHtml(node.name)}</h2>
           <span class="modal-node-status-tag ${node.online ? 'online' : 'offline'}">${node.online ? 'Online' : 'Offline'}</span>
         </div>
-        <div class="modal-node-meta">${node.os || ''} · ${node.arch || ''} · ${node.region || ''}</div>
+        <div class="modal-node-meta">${escapeHtml(node.os || '')} · ${escapeHtml(node.arch || '')} · ${escapeHtml(node.region || '')}</div>
       </div>
 
       <div class="modal-info-row">
         <div class="modal-info-section">
           <h3 class="modal-info-section-title">HARDWARE</h3>
           <div class="modal-info-grid">
-            <div class="info-item"><span class="info-label">CPU</span><span class="info-value">${node.cpu_name || '-'} (${node.cpu_cores || 0} Cores)</span></div>
-            <div class="info-item"><span class="info-label">Architecture</span><span class="info-value">${node.arch || '-'}</span></div>
-            <div class="info-item"><span class="info-label">Virtualization</span><span class="info-value">${node.virtualization || '-'}</span></div>
-            <div class="info-item"><span class="info-label">GPU</span><span class="info-value">${node.gpu_name || '-'}</span></div>
+            <div class="info-item"><span class="info-label">CPU</span><span class="info-value">${t(node.cpu_name)} (${Number(node.cpu_cores) || 0} Cores)</span></div>
+            <div class="info-item"><span class="info-label">Architecture</span><span class="info-value">${t(node.arch)}</span></div>
+            <div class="info-item"><span class="info-label">Virtualization</span><span class="info-value">${t(node.virtualization)}</span></div>
+            <div class="info-item"><span class="info-label">GPU</span><span class="info-value">${t(node.gpu_name)}</span></div>
           </div>
         </div>
 
         <div class="modal-info-section">
           <h3 class="modal-info-section-title">SYSTEM</h3>
           <div class="modal-info-grid">
-            <div class="info-item"><span class="info-label">OS</span><span class="info-value">${node.os || '-'}</span></div>
-            <div class="info-item"><span class="info-label">Kernel</span><span class="info-value">${node.kernel_version || '-'}</span></div>
+            <div class="info-item"><span class="info-label">OS</span><span class="info-value">${t(node.os)}</span></div>
+            <div class="info-item"><span class="info-label">Kernel</span><span class="info-value">${t(node.kernel_version)}</span></div>
             <div class="info-item"><span class="info-label">Uptime</span><span class="info-value" id="modal-uptime">${formatUptime(node.uptime)}</span></div>
             <div class="info-item"><span class="info-label">Last Report</span><span class="info-value" id="modal-last-report">${node.last_report ? new Date(node.last_report).toLocaleString() : '-'}</span></div>
           </div>
@@ -2446,9 +2518,13 @@
   }
 
   function createChartOption(series, hours, formatter, yMax, showLegend = false, splitNumber = 4) {
-    const timestamps = series.flatMap(item => item.data.map(point => point[0])).filter(Number.isFinite);
-    const dataMin = timestamps.length ? Math.min(...timestamps) : null;
-    const dataMax = timestamps.length ? Math.max(...timestamps) : null;
+    // Plain loop: spreading tens of thousands of points (30D) into Math.min/max can overflow the stack.
+    let dataMin = Infinity, dataMax = -Infinity;
+    series.forEach(item => item.data.forEach(point => {
+      const t = point[0];
+      if (Number.isFinite(t)) { if (t < dataMin) dataMin = t; if (t > dataMax) dataMax = t; }
+    }));
+    if (dataMin === Infinity) dataMin = dataMax = null;
     const ink = cssVar('--black', '#000');
     const paper = cssVar('--white', '#fff');
     const muted = cssVar('--chart-label', '#555');
@@ -2479,7 +2555,7 @@
         const timestamp = params[0].value[0];
         const rows = params
           .filter(item => item.seriesType !== 'scatter' && item.value[1] != null)
-          .map(item => `${item.marker}${item.seriesName}: ${formatter(item.value[1])}`);
+          .map(item => `${item.marker}${escapeHtml(item.seriesName)}: ${formatter(item.value[1])}`);
         return `<div style="background:${ink};color:${paper};padding:6px 10px;font-weight:700">${formatChartTime(timestamp, hours, true)}</div><div style="padding:8px 10px;line-height:1.7">${rows.join('<br>')}</div>`;
       }
     },
@@ -2538,6 +2614,8 @@
     ['cpu', 'ram', 'disk', 'net', 'conn', 'proc'].forEach(disposeChart);
     if (typeof echarts === 'undefined') return;
 
+    // LTTB downsampling keeps peaks while drawing at most ~1 point per pixel (7D / 30D ranges).
+    const series = (...args) => Object.assign(createSeries(...args), { sampling: 'lttb' });
     const toPoint = (record, value) => [record.timestamp, value];
     const netDownData = history.map(h => toPoint(h, h.net_in ?? 0));
     const netUpData = history.map(h => toPoint(h, h.net_out ?? 0));
@@ -2551,15 +2629,15 @@
     const procData = history.map(h => toPoint(h, h.process ?? 0));
     const percentFormatter = value => `${Number(value).toFixed(0)}%`;
     const integerFormatter = value => Number(value).toFixed(0);
-    mountChart('cpu', '#chart-cpu', createChartOption([createSeries('CPU', cssVar('--chart-cpu', '#E0C900'), cpuData)], state.modalLoadTimeScale, percentFormatter, 100, false, 5));
-    mountChart('ram', '#chart-ram', createChartOption([createSeries('RAM', cssVar('--chart-ram', '#9B5DE5'), ramData)], state.modalLoadTimeScale, percentFormatter, 100, false, 5));
-    mountChart('disk', '#chart-disk', createChartOption([createSeries('Disk', cssVar('--chart-disk', '#00A854'), diskData)], state.modalLoadTimeScale, percentFormatter, 100, false, 5));
+    mountChart('cpu', '#chart-cpu', createChartOption([series('CPU', cssVar('--chart-cpu', '#E0C900'), cpuData)], state.modalLoadTimeScale, percentFormatter, 100, false, 5));
+    mountChart('ram', '#chart-ram', createChartOption([series('RAM', cssVar('--chart-ram', '#9B5DE5'), ramData)], state.modalLoadTimeScale, percentFormatter, 100, false, 5));
+    mountChart('disk', '#chart-disk', createChartOption([series('Disk', cssVar('--chart-disk', '#00A854'), diskData)], state.modalLoadTimeScale, percentFormatter, 100, false, 5));
     mountChart('net', '#chart-net', createChartOption([
-      createSeries('Down', cssVar('--chart-down', '#0066FF'), netDownData),
-      createSeries('Up', cssVar('--chart-up', '#00A854'), netUpData)
+      series('Down', cssVar('--chart-down', '#0066FF'), netDownData),
+      series('Up', cssVar('--chart-up', '#00A854'), netUpData)
     ], state.modalLoadTimeScale, formatBytes, null, true));
-    mountChart('conn', '#chart-conn', createChartOption([createSeries('Connections', cssVar('--chart-conn', '#FF3333'), connData)], state.modalLoadTimeScale, integerFormatter));
-    mountChart('proc', '#chart-proc', createChartOption([createSeries('Processes', cssVar('--chart-proc', '#0066FF'), procData)], state.modalLoadTimeScale, integerFormatter));
+    mountChart('conn', '#chart-conn', createChartOption([series('Connections', cssVar('--chart-conn', '#FF3333'), connData)], state.modalLoadTimeScale, integerFormatter));
+    mountChart('proc', '#chart-proc', createChartOption([series('Processes', cssVar('--chart-proc', '#0066FF'), procData)], state.modalLoadTimeScale, integerFormatter));
 
 
   }
@@ -2831,6 +2909,7 @@
   }
 
   function startPolling() {
+    state.live = true;
     if (state.pollTimer) {
       clearInterval(state.pollTimer);
     }
@@ -2838,11 +2917,29 @@
   }
 
   function stopPolling() {
+    state.live = false;
+    pausePolling();
+  }
+
+  // Background tabs stop polling (no requests, no DOM work); returning refreshes at once.
+  function pausePolling() {
     if (state.pollTimer) {
       clearInterval(state.pollTimer);
       state.pollTimer = null;
     }
+    stopCarrierPolling();
   }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!state.live) return;
+    if (document.hidden) {
+      pausePolling();
+    } else {
+      fetchNodesAndStatus();
+      startPolling();
+      startCarrierPolling(true);
+    }
+  });
 
   function init() {
     bindThemeMenu();
@@ -2879,9 +2976,16 @@
       }
     });
 
+    // Resize charts at most once per frame (resize events fire many times while dragging).
+    let chartResizeQueued = false;
     window.addEventListener('resize', () => {
-      Object.values(state.charts).forEach(chart => {
-        if (chart && typeof chart.resize === 'function' && !chart.isDisposed()) chart.resize();
+      if (chartResizeQueued) return;
+      chartResizeQueued = true;
+      requestAnimationFrame(() => {
+        chartResizeQueued = false;
+        Object.values(state.charts).forEach(chart => {
+          if (chart && typeof chart.resize === 'function' && !chart.isDisposed()) chart.resize();
+        });
       });
     });
 
@@ -2892,15 +2996,9 @@
 
       function handleScroll() {
         const currentScrollY = window.scrollY;
-
-        if (currentScrollY < lastScrollY) {
-          // Scrolling up - show header
-          header.style.transform = 'translateY(0)';
-        } else if (currentScrollY > 100) {
-          // Scrolling down past threshold - hide header
-          header.style.transform = 'translateY(-100%)';
-        }
-
+        // Only write when the state flips (every write invalidates style).
+        const next = currentScrollY < lastScrollY ? 'translateY(0)' : currentScrollY > 100 ? 'translateY(-100%)' : null;
+        if (next && header.style.transform !== next) header.style.transform = next;
         lastScrollY = currentScrollY;
       }
 
@@ -2925,6 +3023,7 @@
       await fetchNodesAndStatus();
       startPolling();
       startCarrierPolling();
+      if (document.hidden) pausePolling();   // opened in a background tab
     });
   }
 
