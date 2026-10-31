@@ -51,6 +51,9 @@
      glare; outer frames, header and buttons keep full ink. Re-derived on each surface below. */
   --line-mix: 62%;
   --line: var(--black);
+  /* Outer frames (cards, buttons, chips, header rule). Light schemes: full ink, the 1999 look.
+     Dark schemes override it with a dimmed ink, see below. */
+  --frame: var(--black);
   --shadow-offset: 6px;
   --space-step: 0.75rem;
 }
@@ -120,7 +123,11 @@
   --chart-label: var(--text-muted);
   --strip-line: color-mix(in srgb, var(--black) 40%, var(--card-bg));
   --row-hover: color-mix(in srgb, var(--accent) 10%, transparent);
-  --line-mix: 55%;
+  /* Light ink on dark paper glows: full-ink 3-4px frames measured 9-12:1 against the cards while muted
+     text sat at 4.7-6.8:1 and inner lines at ~4.3:1, so the grid out-shouted the content. Frames drop to
+     ~3:1 (2.7-3.2:1 across the dark palettes), inner lines to ~2:1; text keeps full ink, so content reads first. */
+  --frame: color-mix(in srgb, var(--ink) 40%, var(--paper));
+  --line-mix: 25%;
 
   --sig-1: var(--accent-green);
   --sig-2: color-mix(in srgb, var(--accent-green) 55%, var(--accent-yellow));
@@ -335,7 +342,7 @@
 
 /* Dark schemes: hard shadows take a dim tint of the accent so cards keep their offset depth. */
 [data-scheme$="-dark"] {
-  --shadow: color-mix(in srgb, var(--accent) 38%, var(--bg));
+  --shadow: color-mix(in srgb, var(--accent) 28%, var(--bg));
 }
 
 /* Dark schemes: the footer is an ink block in light themes; keep it a dark band here. */
@@ -350,6 +357,8 @@
 .header {
   --text-muted: var(--on-accent);
 }
+/* Frames inside the header / footer follow their own ink (both redefine --black per scheme). */
+.header, .footer { --frame: var(--black); }
 
 [data-scheme$="-dark"] .header {
   --black: var(--on-accent);
@@ -392,7 +401,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Header */
 .header {
   background-color: var(--accent);
-  border-bottom: var(--border-width) solid var(--black);
+  border-bottom: var(--border-width) solid var(--frame);
   position: fixed;
   top: 0;
   left: 0;
@@ -414,7 +423,7 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.5rem;
-  border-bottom: 3px solid var(--black);
+  border-bottom: 3px solid var(--frame);
 }
 
 .logo {
@@ -442,7 +451,7 @@ h1, h2, h3, h4, h5, h6 {
   width: 44px;
   height: 44px;
   background: var(--white);
-  border: 3px solid var(--black);
+  border: 3px solid var(--frame);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -475,7 +484,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0 1rem;
   background: var(--black);
   color: var(--white);
-  border: 3px solid var(--black);
+  border: 3px solid var(--frame);
   text-decoration: none;
   font-family: 'Twemoji Country Flags', 'Space Grotesk', sans-serif;
   font-weight: 700;
@@ -516,7 +525,7 @@ h1, h2, h3, h4, h5, h6 {
   flex: 1;
   min-width: 80px;
   padding: 1rem 1.5rem;
-  border-right: 3px solid var(--black);
+  border-right: 3px solid var(--frame);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -566,7 +575,7 @@ h1, h2, h3, h4, h5, h6 {
   gap: 0;
   padding: 0;
   background: var(--card-bg);
-  border: var(--border-width) solid var(--black);
+  border: var(--border-width) solid var(--frame);
   box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--shadow);
   position: relative;
   overflow-x: auto;
@@ -585,7 +594,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Node Card */
 .node-card {
   background: var(--card-bg);
-  border: var(--border-width) solid var(--black);
+  border: var(--border-width) solid var(--frame);
   box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--shadow);
   padding: 1.25rem;
   transition: transform 0.1s ease, box-shadow 0.1s ease;
@@ -831,7 +840,7 @@ h1, h2, h3, h4, h5, h6 {
   gap: 0.75rem;
   padding: 1rem 1.25rem;
   background: var(--white);
-  border: 3px solid var(--black);
+  border: 3px solid var(--frame);
   box-shadow: 4px 4px 0 var(--shadow);
 }
 
@@ -840,7 +849,7 @@ h1, h2, h3, h4, h5, h6 {
   grid-column: 1 / -1;
   text-align: center;
   padding: 4rem 2rem;
-  border: 4px dashed var(--black);
+  border: 4px dashed var(--frame);
   background: var(--card-bg);
 }
 
@@ -859,7 +868,7 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--white);
   padding: 1.25rem 1.5rem;
   margin-top: auto;
-  border-top: var(--border-width) solid var(--black);
+  border-top: var(--border-width) solid var(--frame);
 }
 
 .footer-content {
@@ -1351,11 +1360,11 @@ h1, h2, h3, h4, h5, h6 {
   .stat-item {
     min-width: 0;
     padding: 0.55rem 0.25rem;
-    border-right: 3px solid var(--black);
+    border-right: 3px solid var(--frame);
   }
 
   .stat-item:nth-child(-n + 4) {
-    border-bottom: 3px solid var(--black);
+    border-bottom: 3px solid var(--frame);
   }
 
   .stat-item:nth-child(4),
@@ -1442,7 +1451,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .modal-container {
   background: var(--white);
-  border: var(--border-width) solid var(--black);
+  border: var(--border-width) solid var(--frame);
   box-shadow: 12px 12px 0 var(--shadow);
   width: min(96vw, 1400px);
   max-width: 1400px;
@@ -1471,7 +1480,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0;
   background: var(--black);
   color: var(--white);
-  border: 3px solid var(--black);
+  border: 3px solid var(--frame);
   font-size: 24px;
   font-family: 'Twemoji Country Flags', 'Space Grotesk', sans-serif;
   font-weight: 700;
@@ -1520,7 +1529,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .modal-node-header {
-  border-bottom: 6px solid var(--black);
+  border-bottom: 6px solid var(--frame);
   padding-bottom: 1.5rem;
   margin-bottom: 2rem;
 }
@@ -2226,7 +2235,7 @@ h1, h2, h3, h4, h5, h6 {
   width: min(100%, 460px);
   padding: 2rem;
   background: var(--card-bg);
-  border: var(--border-width) solid var(--black);
+  border: var(--border-width) solid var(--frame);
   box-shadow: 12px 12px 0 var(--shadow);
   opacity: 0;
   transform: translateY(16px) scale(0.98);
@@ -2244,7 +2253,7 @@ h1, h2, h3, h4, h5, h6 {
   right: 0.75rem;
   width: 38px;
   height: 38px;
-  border: 3px solid var(--black);
+  border: 3px solid var(--frame);
   background: var(--black);
   color: var(--white);
   box-shadow: 3px 3px 0 var(--accent);
@@ -2256,7 +2265,7 @@ h1, h2, h3, h4, h5, h6 {
   padding-right: 2.5rem;
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 5px solid var(--black);
+  border-bottom: 5px solid var(--frame);
 }
 
 .auth-kicker {
@@ -2295,7 +2304,7 @@ h1, h2, h3, h4, h5, h6 {
   width: 100%;
   height: 46px;
   padding: 0 0.75rem;
-  border: 3px solid var(--black);
+  border: 3px solid var(--frame);
   border-radius: 0;
   outline: none;
   background: var(--bg);
@@ -2322,7 +2331,7 @@ h1, h2, h3, h4, h5, h6 {
 .auth-submit,
 .auth-back,
 .auth-oauth a {
-  border: 3px solid var(--black);
+  border: 3px solid var(--frame);
   border-radius: 0;
   font-family: 'Twemoji Country Flags', 'Space Grotesk', sans-serif;
   font-weight: 700;
@@ -2702,11 +2711,11 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   .header.has-map .stat-item:nth-child(-n + 3) {
-    border-bottom: 3px solid var(--black);
+    border-bottom: 3px solid var(--frame);
   }
 
   .header.has-map .stat-item:nth-child(6) {
-    border-right: 3px solid var(--black);
+    border-right: 3px solid var(--frame);
   }
 
   .stats-map {
@@ -2979,7 +2988,7 @@ body::before {
   padding: 0.75rem;
   background: var(--white);
   color: var(--black);
-  border: 3px solid var(--black);
+  border: 3px solid var(--frame);
   box-shadow: 6px 6px 0 var(--shadow);
   font-family: 'Twemoji Country Flags', 'Space Grotesk', sans-serif;
 }
@@ -3033,13 +3042,13 @@ body::before {
 
 .theme-item:hover,
 .theme-item:focus-visible {
-  border-color: var(--black);
+  border-color: var(--frame);
   background: var(--bg);
   outline: none;
 }
 
 .theme-item[aria-checked="true"] {
-  border-color: var(--black);
+  border-color: var(--frame);
   background: var(--accent);
   color: var(--on-accent);
 }
